@@ -2081,7 +2081,7 @@ var SnapTool = function (_maptalks$Class) {
 
     SnapTool.prototype.disable = function disable() {
         var map = this.getMap();
-        map.off('mousemove', this._mousemove);
+        map.off('mousemove touchstart', this._mousemove);
         if (this._mousemoveLayer) {
             this._mousemoveLayer.hide();
         }
@@ -2361,7 +2361,7 @@ var SnapTool = function (_maptalks$Class) {
                 this.snapPoint = null;
             }
         };
-        map.on('mousemove', this._mousemove, this);
+        map.on('mousemove touchstart', this._mousemove, this);
     };
 
     /**
