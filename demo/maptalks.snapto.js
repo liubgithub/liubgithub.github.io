@@ -1,7 +1,7 @@
 /*!
- * maptalks.snapto v0.1.5
+ * maptalks.snapto v0.1.9
  * LICENSE : MIT
- * (c) 2016-2017 maptalks.org
+ * (c) 2016-2018 maptalks.org
  */
 /*!
  * requires maptalks@^0.33.1 
@@ -1966,8 +1966,7 @@ var options = {
         'markerLineOpacity': 1,
         'markerWidth': 15,
         'markerHeight': 15
-    },
-    'anchor': true
+    }
 };
 
 /**
@@ -2003,6 +2002,10 @@ var SnapTool = function (_maptalks$Class) {
     SnapTool.prototype.setMode = function setMode(mode) {
         if (this._checkMode(this._mode)) {
             this._mode = mode;
+            if (this.snaplayer) {
+                var geometries = this.snaplayer.getGeometries();
+                this.allGeometries = this._compositGeometries(geometries);
+            }
         } else {
             throw new Error('snap mode is invalid');
         }
@@ -2055,6 +2058,10 @@ var SnapTool = function (_maptalks$Class) {
 
     SnapTool.prototype.enable = function enable() {
         var map = this.getMap();
+        if (this.snaplayer) {
+            var geometries = this.snaplayer.getGeometries();
+            this.allGeometries = this._compositGeometries(geometries);
+        }
         if (this.allGeometries) {
             if (!this._mousemove) {
                 this._registerEvents(map);
@@ -2074,11 +2081,12 @@ var SnapTool = function (_maptalks$Class) {
 
     SnapTool.prototype.disable = function disable() {
         var map = this.getMap();
-        map.off('mousemove', this._mousemove);
+        map.off('mousemove touchstart', this._mousemove);
         if (this._mousemoveLayer) {
             this._mousemoveLayer.hide();
         }
         delete this._mousemove;
+        this.allGeometries = [];
     };
 
     /**
@@ -2101,11 +2109,13 @@ var SnapTool = function (_maptalks$Class) {
     SnapTool.prototype.setLayer = function setLayer(layer) {
         if (layer instanceof maptalks.VectorLayer) {
             var geometries = layer.getGeometries();
+            this.snaplayer = layer;
             this.allGeometries = this._compositGeometries(geometries);
-            layer.on('addgeo', function (e) {
-                this._addGeometries(e.geometries);
+            layer.on('addgeo', function () {
+                var geometries = this.snaplayer.getGeometries();
+                this.allGeometries = this._compositGeometries(geometries);
             }, this);
-            layer.on('clear', function () {
+            this.snaplayer.on('clear', function () {
                 this._clearGeometries();
             }, this);
             this._mousemoveLayer.bringToFront();
@@ -2232,7 +2242,11 @@ var SnapTool = function (_maptalks$Class) {
     };
 
     SnapTool.prototype._parserToPoints = function _parserToPoints(geo) {
-        var coordinates = geo.getCoordinates();
+        var type = geo.getType();
+        var coordinates = null;
+        if (type === 'Circle' || type === 'Ellipse') {
+            coordinates = geo.getShell();
+        } else coordinates = geo.getCoordinates();
         var geos = [];
         //two cases,one is single geometry,and another is multi geometries
         if (coordinates[0] instanceof Array) {
@@ -2347,7 +2361,7 @@ var SnapTool = function (_maptalks$Class) {
                 this.snapPoint = null;
             }
         };
-        map.on('mousemove', this._mousemove, this);
+        map.on('mousemove touchstart', this._mousemove, this);
     };
 
     /**
@@ -2521,6 +2535,6 @@ exports.SnapTool = SnapTool;
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-typeof console !== 'undefined' && console.log('maptalks.snapto v0.1.5, requires maptalks@^0.33.1.');
+typeof console !== 'undefined' && console.log('maptalks.snapto v0.1.9, requires maptalks@^0.33.1.');
 
 })));
