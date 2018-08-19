@@ -1,0 +1,241 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="点击查看port" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="favicon.ico">
+    <title>三维数据可视化展示示例</title>
+
+    <!-- Bootstrap core CSS -->
+    <!--<link href="../../../../dist/css/bootstrap.min.css" rel="stylesheet">-->
+      <link href="css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- Custom styles for this template -->
+    <link href="album.css" rel="stylesheet">
+  </head>
+
+  <body>
+
+    <header>
+      <div class="collapse bg-dark" id="navbarHeader">
+        <div class="container">
+          <div class="row">
+            <div class="col-sm-8 col-md-7 py-4">
+              <h4 class="text-white">关于</h4>
+              <p class="text-muted">以下数据均为测试数据，是基于cesium渲染框架所做的一些简单的三维场景展示功能，示例运行对计算机显卡性能要求较高，建议在gt650以上显卡环境下测试使用</p>
+            </div>
+            <div class="col-sm-4 offset-md-1 py-4">
+              <h4 class="text-white">数据生产</h4>
+              <ul class="list-unstyled">
+                <li><a href="#" class="text-white">Follow on Twitter</a></li>
+                <li><a href="#" class="text-white">github</a></li>
+                <li><a href="#" class="text-white">电子邮件</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="navbar navbar-dark bg-dark box-shadow">
+        <div class="container d-flex justify-content-between">
+          <a href="#" class="navbar-brand d-flex align-items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 点击查看Box="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            <strong>三维数据展示</strong>
+          </a>
+          <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarHeader" aria-controls="navbarHeader" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main role="main">
+
+      <section class="jumbotron text-center">
+        <div class="container">
+          <h1 class="jumbotron-heading">三维数据展示平台示例</h1>
+          <p class="lead text-muted">以下示例所涉及到的数据均为测试数据，是基于cesium渲染框架所做的一些简单的三维场景展示功能，示例运行对计算机显卡性能要求较高，建议在chrome浏览器上测试使用</p>
+          <p>
+            <a href="#" class="btn btn-primary my-2">关于数据</a>
+            <a href="#" class="btn btn-secondary my-2">关于我们</a>
+          </p>
+        </div>
+      </section>
+
+      <div class="album py-5 bg-light">
+        <div class="container">
+
+          <div class="row">
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top"  src="images/1.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">可视域分析，通过设置观察点，计算其可看到的范围。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/viewshed3D.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">1 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                  <img class="card-img-top" src="images/2.png" />
+                  <div class="card-body">
+                  <p class="card-text">通过cesium，加载模型软件生成的BIM数据，并在前端绘制。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/BIM.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">2 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/3.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例展示了3dmax生产的模型数据，并通过鼠标点击建筑物高亮显示进行交互操作。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/jingmo.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">3 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/4.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例展示了基于3dmax创建的obj模型转换成的点云数据。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/pointCloud.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">4 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/5.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例展示了倾斜摄影数据和建筑物的水面特效，移动地图可看到比较清晰的水波荡漾的效果。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/srsb_water.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">5 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/6.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例通过设置一些必要的参数，模拟了水淹模型的动态过程，颜色的深浅代表地面起伏的程度。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/floodex.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">6 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/7.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例通过设置必要的参数，科比较真实的模拟洪水蔓延时的动态化过程，和水淹分析效果类似。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/flood.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">7 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/8.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例展示了STK高程数据，并可绘制高程模型的等高线、等高面、等高线面三种渲染填充方式。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/STKterrain.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">8 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/9.png" />
+                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
+                <div class="card-body">
+                  <p class="card-text">此示例展示了高程模型数据的坡面分析效果，通过设置绘制方式和标绘特定区域，来展示该区域的坡向分布情况。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/terrainSlopeAnalysis.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">9 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="text-muted">
+      <div class="container">
+        <p class="float-right">
+          <a href="#">回到顶部</a>
+        </p>
+        <p>所有数据不可用于商业行为</p>
+        <p>若对本示例希望了解更多，可以访问<a href="https://developer.mozilla.org/zh-CN/docs/Web/API/WebGL_API">webgl</a> 或者 <a href="https://cesiumjs.org/demos/">cesium</a>.</p>
+      </div>
+    </footer>
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script>window.jQuery || document.write('<script src="../../../../assets/js/vendor/jquery-slim.min.js"><\/script>')</script>
+    <script src="../../../../assets/js/vendor/popper.min.js"></script>
+    <script src="../../../../dist/js/bootstrap.min.js"></script>
+    <script src="../../../../assets/js/vendor/holder.min.js"></script>
+  </body>
+</html>
