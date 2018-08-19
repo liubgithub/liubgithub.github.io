@@ -6,7 +6,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
     <link rel="icon" href="favicon.ico">
-    <title>三维数据可视化展示示例</title>
+    <title>webgl学习示例</title>
 
     <!-- Bootstrap core CSS -->
     <!--<link href="../../../../dist/css/bootstrap.min.css" rel="stylesheet">-->
@@ -24,10 +24,10 @@
           <div class="row">
             <div class="col-sm-8 col-md-7 py-4">
               <h4 class="text-white">关于</h4>
-              <p class="text-muted">以下数据均为测试数据，是基于cesium渲染框架所做的一些简单的三维场景展示功能，示例运行对计算机显卡性能要求较高，建议在gt650以上显卡环境下测试使用</p>
+              <p class="text-muted"></p>
             </div>
             <div class="col-sm-4 offset-md-1 py-4">
-              <h4 class="text-white">数据生产</h4>
+              <h4 class="text-white">数据</h4>
               <ul class="list-unstyled">
                 <li><a href="#" class="text-white">Follow on Twitter</a></li>
                 <li><a href="#" class="text-white">github</a></li>
@@ -54,11 +54,11 @@
 
       <section class="jumbotron text-center">
         <div class="container">
-          <h1 class="jumbotron-heading">三维数据展示平台示例</h1>
-          <p class="lead text-muted">以下示例所涉及到的数据均为测试数据，是基于cesium渲染框架所做的一些简单的三维场景展示功能，示例运行对计算机显卡性能要求较高，建议在chrome浏览器上测试使用</p>
+          <h1 class="jumbotron-heading">webgl学习示例</h1>
+          <p class="lead text-muted">以下示例都是本人基于learnopengl教程，利用原生wegl的方式来实现的。对于初学webgl的同学来说可能会比较有用，也是图形学入门比较好的参考资料。我在整理这些平时学习的资料的过程中也是对以往知识点的一次梳理与复习，webgl的学习资料特别少，希望能帮到对webgl感兴趣的同学。另外，有什么纰漏，也请不吝赐教。</p>
           <p>
-            <a href="#" class="btn btn-primary my-2">关于数据</a>
-            <a href="#" class="btn btn-secondary my-2">关于我们</a>
+            <a href="https://learnopengl-cn.github.io" class="btn btn-primary my-2">关于<b>Learn OpenGL</b></a>
+            <a href="https://github.com/liubgithub" class="btn btn-secondary my-2">关于我</a>
           </p>
         </div>
       </section>
@@ -70,12 +70,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top"  src="images/1.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
                   <p class="card-text">绘制三角形，比较基础，但也是webgl绘制图形的基础。</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/你好三角形.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第一章/你好三角形.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">1 mins</small>
@@ -85,13 +84,12 @@
             </div>
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                   <img class="card-img-top" src="images/2.png" />
                   <div class="card-body">
                   <p class="card-text">圆的绘制。圆的实质也是多个三角形绕着圆形拼成的正多边形，边越多，圆越接近圆滑</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/圆.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第一章/圆.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">2 mins</small>
@@ -102,12 +100,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/3.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
                   <p class="card-text">学习纹理的加载方式，理解纹素坐标的含义</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/纹理.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第一章/纹理.html');">点击查看</button>
                     </div>
                     <small class="text-muted">3 mins</small>
                   </div>
@@ -118,12 +115,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/4.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
                   <p class="card-text">这一节的主要内容是webgl中的模型矩阵的变换，包括平移、旋转、缩放，并注意顺序的影响</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/变换.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第一章/变换.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">4 mins</small>
@@ -134,12 +130,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/5.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
                   <p class="card-text">理解view矩阵，学会怎样通过变换相机矩阵来达到改变视角的方法</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/摄像机.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第一章/摄像机.html');">点击查看</button>
                     </div>
                     <small class="text-muted">5 mins</small>
                   </div>
@@ -149,12 +144,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/6.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
-                  <p class="card-text">此示例通过设置一些必要的参数，模拟了水淹模型的动态过程，颜色的深浅代表地面起伏的程度。</p>
+                  <p class="card-text">接下来的例子是第二章的内容,首先是基础光照，理解光照的本质。</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/floodex.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/6.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">6 mins</small>
@@ -166,12 +160,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/7.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
-                  <p class="card-text">此示例通过设置必要的参数，科比较真实的模拟洪水蔓延时的动态化过程，和水淹分析效果类似。</p>
+                  <p class="card-text">材质。不同物体材质不一样，对光照的反射情况也不一样。</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/flood.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/材质.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">7 mins</small>
@@ -182,12 +175,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/8.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
-                  <p class="card-text">此示例展示了STK高程数据，并可绘制高程模型的等高线、等高面、等高线面三种渲染填充方式。</p>
+                  <p class="card-text">光照贴图-漫反射贴图。漫反射贴图的效果展示，注意漫反射的方式</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/STKterrain.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/光照贴图-漫反射贴图.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">8 mins</small>
@@ -198,12 +190,11 @@
             <div class="col-md-4">
               <div class="card mb-4 box-shadow">
                   <img class="card-img-top" src="images/9.png" />
-                <!--<img class="card-img-top" data-src="holder.js/100px225?theme=thumb&bg=55595c&fg=eceeef&text=Thumbnail" alt="Card image cap">-->
                 <div class="card-body">
-                  <p class="card-text">此示例展示了高程模型数据的坡面分析效果，通过设置绘制方式和标绘特定区域，来展示该区域的坡向分布情况。</p>
+                  <p class="card-text">类似前面的光照贴图-漫反射贴图，只不过镜面反射的光是有方向的。</p>
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="btn-group">
-                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('http://139.159.219.234/webgl/examples/terrainSlopeAnalysis.html');">点击查看</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/光照贴图-镜面光贴图.html');">点击查看</button>
                       
                     </div>
                     <small class="text-muted">9 mins</small>
@@ -211,6 +202,282 @@
                 </div>
               </div>
             </div>
+
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/10.png" />
+                <div class="card-body">
+                  <p class="card-text">定向光，即光照的方向角度保持不变。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/定向光.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">10 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/11.png" />
+                <div class="card-body">
+                  <p class="card-text">点光源的衰减，即光照强度随灯光与物体的距离发生酸碱的情况。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/点光源的衰减.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">11 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/12.png" />
+                <div class="card-body">
+                  <p class="card-text">聚光效果，即光的照射方式类似于手电筒的光束，有一定的方向。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/聚光.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">12 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/13.png" />
+                <div class="card-body">
+                  <p class="card-text">聚光柔和，在聚光的基础上，做了边缘柔和的效果，使得光圈的边缘过渡更自然。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/聚光柔和.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">13 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/14.png" />
+                <div class="card-body">
+                  <p class="card-text">多光源，不同方向照射来的光源一起叠加的效果。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第二章/多光源.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">14 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/15.png" />
+                <div class="card-body">
+                  <p class="card-text">接下来是第三章的内容，也是webgl/opengl 里面比较重要的知识点，首先是深度测试。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/深度测试.html');">点击查看</button>
+                      
+                    </div>
+                    <small class="text-muted">15 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/16.png" />
+                <div class="card-body">
+                  <p class="card-text">模板测试。模板测试多用来绘制物体的边线，也可用来绘制阴影。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/模板测试.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">16 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/17.png" />
+                <div class="card-body">
+                  <p class="card-text">面剔除。webgl中配合面剔除可以在绘制物体时不会只被遮挡的部分，可大幅度提高绘制效率，节省开销。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/面剔除.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">17 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/18.png" />
+                <div class="card-body">
+                  <p class="card-text">混合-片段丢弃。首先是混合，其次利用discard关键字，不绘制某些特定片段。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/混合-片段丢弃.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">18 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/19.png" />
+                <div class="card-body">
+                  <p class="card-text">混合-半透明纹理。主要用于处理物体有透明度的情况，例如窗户等。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/混合-半透明纹理.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">19 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/20.png" />
+                <div class="card-body">
+                  <p class="card-text">天空盒效果。也就是我们所熟知的全景效果，例子中增加了一个反射的效果</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/天空盒-反射效果.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">20 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+             <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/21.png" />
+                <div class="card-body">
+                  <p class="card-text">天空盒-折射效果。和反射效果类似，只不过光照方式改成了折射</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/天空盒-折射效果.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">21 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/27.png" />
+                <div class="card-body">
+                  <p class="card-text">接下来是第四章，高级webgl的内容，首先是布林.冯光照模型。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/Blinn-Phong.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">22 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">接下来是第四章，高级webgl的内容，首先是
+                  <img class="card-img-top" src="images/22.png" />
+                <div class="card-body">
+                  <p class="card-text">Gamma校正。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/Gamma校正.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">22 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/23.png" />
+                <div class="card-body">
+                  <p class="card-text">法线贴图。利用法线贴图，可真实的反映物体表面的凹凸起伏情况。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/法线贴图.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">23 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/24.png" />
+                <div class="card-body">
+                  <p class="card-text">视差贴图。视差贴图与法线贴图比较类似，只不过，它是利用我们眼睛与物体片元的视觉差异形成一种错落有致的感觉。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/视差贴图.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">24 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/25.png" />
+                <div class="card-body">
+                  <p class="card-text">HDR+泛光。该示例把HDR和泛光的效果糅合进来，泛光主要包括真实场景绘制、hdr、泛光模糊计算、最终绘制四个步骤.</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/泛光.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">25 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/26.png" />
+                <div class="card-body">
+                  <p class="card-text">阴影。本示例利用PCF方式消除阴影生成过程中出现的锯齿情况，阴影实现方式很多，可以用深度贴图，也可以用esm的方式。</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/PCF阴影消除锯齿.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">26 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card mb-4 box-shadow">
+                  <img class="card-img-top" src="images/28.png" />
+                <div class="card-body">
+                  <p class="card-text">延迟着色。延迟着色的实质就是在最终渲染前，通过帧缓冲绘制复杂场景，最后以一个四边形贴图方式绘制出来</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="javascript: window.open('project/第三章/延迟着色.html');">点击查看</button>
+                    </div>
+                    <small class="text-muted">28 mins</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -222,8 +489,8 @@
         <p class="float-right">
           <a href="#">回到顶部</a>
         </p>
-        <p>所有数据不可用于商业行为</p>
-        <p>若对本示例希望了解更多，可以访问<a href="https://developer.mozilla.org/zh-CN/docs/Web/API/WebGL_API">webgl</a> 或者 <a href="https://cesiumjs.org/demos/">cesium</a>.</p>
+        <p>示例中用到的数据均为测试数据。</p>
+        <p>若对本示例希望了解更多，可以访问<a href="https://github.com/liubgithub/learnwebgl">learn webgl</a> 以及 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/WebGL_API">LearnOpenGL</a>.</p>
       </div>
     </footer>
 
