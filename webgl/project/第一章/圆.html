@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>你好三角形</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script type="text/javascript">
+       //頂點着色器
+        var VSHADER_SOURCE =
+          `attribute vec4 a_Position;
+           void main() {
+             gl_Position = a_Position;
+           }`;
+
+        // 片元着色器
+        var FSHADER_SOURCE =
+          `precision mediump float;
+           uniform vec3 u_Color;
+           void main() {
+             gl_FragColor =vec4(u_Color,1.0);
+           }`;
+
+        function main(){
+           var canvas = document.getElementById('webgl');
+           var gl = getWebGLContext(canvas);//拿到webglcontext,主要有這幾種 "webgl", "experimental-webgl", "webkit-3d", "moz-webgl"
+           var program = createProgram(gl, VSHADER_SOURCE, FSHADER_SOURCE);//webglcontext和着色器的关联，生成着色器程序对象。
+           gl.useProgram(program);//这一步非常重要，必须指明gl要运行的着色器程序
+           getGLSLLocation(gl, program);//获取glsl中attributes和uniforms的location
+           var n = initVertexBuffers(gl, program);
+           gl.clearColor(0.0, 0.0, 0.0, 1.0);
+           gl.clear(gl.COLOR_BUFFER_BIT);
+           gl.uniform3f(program.u_Color,1.0,0.0,0.0);         
+           gl.drawArrays(gl.TRIANGLE_FAN, 0, n);
+        }
+
+        function getGLSLLocation(gl, program) {
+            program.a_Position = gl.getAttribLocation(program, 'a_Position');
+            program.u_Color = gl.getUniformLocation(program, 'u_Color');
+        }
+        
+        function initVertexBuffers(gl, program){
+            // 画n个点
+            var n = 64;
+            var vertices = new Float32Array(n*2);
+            var angle = 0; // 开始的弧度 
+            var r = 0.5; // 圆的半径
+            // θ值
+            var stepAngle = 360/n * (Math.PI/180);
+            for(var i=0; i<n*2; i+=2){
+               // 计算顶点x坐标
+                vertices[i] = r * Math.cos(angle);
+               // 计算顶点y坐标
+               vertices[i+1] = r * Math.sin(angle);
+               angle += stepAngle;
+            }
+
+            // 创建一个缓存对象，用于存放顶点数据
+            var vertexBuffer = gl.createBuffer();
+            // 绑定缓存对象
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            // 把数据写到缓冲对象中
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            // 获取顶点着色器代码中的顶点变量
+            //var a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+            // 设置变量获取数据规则
+            gl.vertexAttribPointer(program.a_Position, 2, gl.FLOAT, false, 0, 0);
+            // 允许变量从 ARRAY_BUFFER目标上绑定的缓冲区对象获取数据
+            gl.enableVertexAttribArray(program.a_Position);
+
+            return n;
+          }
+        function initialAttributes(gl,program) {
+            var vertics = new Float32Array([
+                 0.0, 0.5, 0.0, 1.0,0.0,0.0,
+                -0.5, -0.5, 0.0, 0.0,1.0,0.0,
+                0.5, -0.5, 0.0, 0.0,0.0,1.0
+            ]);//顶点数据,标准化设备坐标(NDC)，最后会转换到屏幕坐标上去
+
+            var vertexBuffer = gl.createBuffer();
+            if (!vertexBuffer) return -1;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);//这个过程类似初始化一个空的ARRAY_BUFFER类型的数据缓冲区
+            gl.bufferData(gl.ARRAY_BUFFER, vertics, gl.STATIC_DRAW);//将数据填充到缓冲区中
+            var FSIZE = vertics.BYTES_PER_ELEMENT;
+
+            gl.vertexAttribPointer(program.a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0);//将缓冲数据分配到对应的位置上上
+            gl.enableVertexAttribArray(program.a_Position);//开启数据分配操作
+
+            gl.vertexAttribPointer(program.a_Color, 3, gl.FLOAT, false, FSIZE * 6, FSIZE * 3);
+            gl.enableVertexAttribArray(program.a_Color);
+
+            return 3;
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="webgl" width="512" height="512">
+        Please use a browser that supports "canvas"
+    </canvas>
+</body>
+</html>

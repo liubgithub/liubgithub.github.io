@@ -1,0 +1,503 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>高级光照</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix.js"></script>
+    <script type="text/javascript">
+        //法线贴图的shader
+        var VSHADER_SOURCE =
+        `
+          attribute vec4 a_Position;
+          attribute vec4 a_Normal; // Normal
+          attribute vec2 a_TexCoord;
+          attribute vec4 aTangent;
+          attribute vec4 aBitangent;
+
+          uniform mat4 u_MvpMatrix;
+          uniform mat4 u_normalMatrix;   //transpose(inverse(u_ModelMatrix))这个过程在js里算的
+          uniform mat4 u_ModelMatrix;    // Model matrix
+
+          uniform vec3 lightPos;
+          uniform vec3 viewPos;
+
+          varying vec3 v_FragPos;
+          varying vec2 v_TexCoords;
+          varying vec3 TangentLightPos;
+          varying vec3 TangentViewPos;
+          varying vec3 TangentFragPos;
+        //0, 1, 2,
+        //3, 4, 5,
+        //6, 7, 8
+        //转置矩阵的方法
+        mat3 transpose_mat3(mat3 mat) {
+           float t = mat[0][1];
+           mat[0][1]= mat[1][0];
+           mat[1][0]=t;
+           t = mat[0][2];
+           mat[0][2]= mat[2][0];
+           mat[2][0]=t;
+           t = mat[1][2];
+           mat[1][2]= mat[2][1];
+           mat[2][1]=t;
+           return mat;
+        }
+
+        void main() {
+               vec4 test = aBitangent*vec4(1.0);
+               v_FragPos = vec3(u_ModelMatrix * a_Position);
+               v_TexCoords = a_TexCoord;
+
+               mat4 normalMatrix = u_normalMatrix;
+               //计算切线向量
+               vec3 T = normalize(vec3(normalMatrix * aTangent));
+               vec3 N = normalize(vec3(normalMatrix * a_Normal));
+               T = normalize(T -dot(T, N) * N);
+               vec3 B = cross(N, T);
+
+               mat3 TBN = transpose_mat3(mat3(T, B, N));
+               TangentLightPos = TBN * lightPos;
+               TangentViewPos  = TBN * viewPos;
+               TangentFragPos  = TBN * v_FragPos;
+
+               gl_Position = u_MvpMatrix * a_Position;
+        }
+        `;
+        var FSHADER_SOURCE =
+          ` #ifdef GL_ES
+              precision mediump float;
+            #endif
+            varying vec3 v_FragPos;
+            varying vec2 v_TexCoords;
+            varying vec3 TangentLightPos;
+            varying vec3 TangentViewPos;
+            varying vec3 TangentFragPos;
+
+             uniform sampler2D diffuseMap;
+             uniform sampler2D normalMap;
+             uniform vec3 u_lightColor;
+
+             void main()
+            {
+                // obtain normal from normal map in range [0,1]
+                vec3 normal = texture2D(normalMap, v_TexCoords).rgb;
+                // transform normal vector to range [-1,1]
+                normal = normalize(normal * 2.0 -1.0);  // this normal is in tangent space
+
+                // get diffuse color
+                vec3 color = texture2D(diffuseMap, v_TexCoords).rgb;
+                // ambient
+                float ambient_length = 0.5;
+                vec3 ambient = u_lightColor * color*ambient_length;
+                // diffuse
+                vec3 lightDir = normalize(TangentLightPos -TangentFragPos);
+                float diff = max(dot(lightDir, normal), 0.0);
+                vec3 diffuse = diff * color;
+                // specular
+                vec3 viewDir = normalize(TangentViewPos -TangentFragPos);
+                vec3 reflectDir = reflect(-lightDir, normal);
+                vec3 halfwayDir = normalize(lightDir +viewDir);
+                float spec = pow(max(dot(normal, halfwayDir), 0.0), 8.0);
+                //float spec = pow(max(dot(normal, reflectDir), 0.0), 8.0);
+                float specular_length = 1.0;
+                vec3 specular = u_lightColor * spec*specular_length;
+                gl_FragColor = vec4(ambient +diffuse +specular, 1.0);
+                //gl_FragColor = vec4(diff,diff,diff, 1.0);
+            }
+          `;
+
+        var VSHADER_SOURCE_LIGHT =
+            `attribute vec4 a_Position;
+            uniform mat4 u_lightmvpMatrix;
+            void main() {
+               gl_Position = u_lightmvpMatrix * a_Position;
+          }`;
+
+        var FSHADER_SOURCE_LIGHT =
+          `#ifdef GL_ES
+          precision mediump float;
+          #endif
+          void main() {
+            gl_FragColor = vec4(1.0);
+        }`;
+
+        var cameraPos, light_Pos;
+        function main() {
+            var canvas = document.getElementById('webgl');
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // 初始化着色器程序
+            var lightProgram = createProgram(gl, VSHADER_SOURCE_LIGHT, FSHADER_SOURCE_LIGHT);
+            var planeProgram = createProgram(gl, VSHADER_SOURCE, FSHADER_SOURCE);
+            if (!lightProgram || !planeProgram) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            // 获取所有uniform和attribute在着色器中的位置
+            lightProgram.a_Position = gl.getAttribLocation(lightProgram, 'a_Position');
+            lightProgram.u_lightColor = gl.getUniformLocation(lightProgram, 'u_lightColor');
+            lightProgram.u_lightmvpMatrix = gl.getUniformLocation(lightProgram, 'u_lightmvpMatrix');
+
+            planeProgram.u_lightColor = gl.getUniformLocation(planeProgram, 'u_lightColor');
+            planeProgram.u_lightPos = gl.getUniformLocation(planeProgram, 'lightPos');
+            planeProgram.u_viewPos = gl.getUniformLocation(planeProgram, 'viewPos');
+
+            planeProgram.a_Position = gl.getAttribLocation(planeProgram, 'a_Position');
+            planeProgram.a_Normal = gl.getAttribLocation(planeProgram, 'a_Normal');
+            planeProgram.a_TexCoord = gl.getAttribLocation(planeProgram, 'a_TexCoord');
+            planeProgram.aTangent = gl.getAttribLocation(planeProgram, 'aTangent');
+            planeProgram.aBitangent = gl.getAttribLocation(planeProgram, 'aBitangent');
+
+            planeProgram.u_MvpMatrix = gl.getUniformLocation(planeProgram, 'u_MvpMatrix');
+            planeProgram.u_ModelMatrix = gl.getUniformLocation(planeProgram, 'u_ModelMatrix');
+            planeProgram.u_NormalMatrix = gl.getUniformLocation(planeProgram, 'u_normalMatrix');
+            planeProgram.diffuseMap = gl.getUniformLocation(planeProgram, 'diffuseMap');
+            planeProgram.normalMap = gl.getUniformLocation(planeProgram, 'normalMap');
+
+
+            // 设置顶点信息
+            var cubeLight = initVertexBuffers(gl);
+
+            var planeObject = initPlaneVertexBuffers(gl);
+            if (!planeObject) {
+                console.log('Failed to set the vertex information');
+                return;
+            }
+            //
+            // 设置纹理，包括普通贴图和法线贴图
+            var diffuseMap = initTextures(gl, planeProgram, '../images/brick-diffuse.png',planeProgram.diffuseMap, 0);
+            var normalMap = initTextures(gl, planeProgram, '../images/brick-normals.png', planeProgram.normalMap, 1);
+            if (!diffuseMap || !normalMap) {
+                console.log('Failed to intialize the texture.');
+                return;
+            }
+
+            // 开启深度测试
+            gl.enable(gl.DEPTH_TEST);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+            //计算视图矩阵
+            cameraPos = [0.0, 5.0, 10.0];
+            light_Pos = new Vector3([-2.0, 2.0, -2.0]);
+            var viewProjMatrix = new Matrix4();
+            viewProjMatrix.setPerspective(45.0, canvas.width / canvas.height, 1.0, 100.0);
+            viewProjMatrix.lookAt(cameraPos[0], cameraPos[1], cameraPos[2], 0, 0, 0, 0, 1, 0);
+
+            // 开始绘制
+            var currentAngle = 0.0;
+            var tick = function () {
+                currentAngle = animate(currentAngle);  
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); 
+                // 画灯光
+                drawLight(gl, lightProgram, cubeLight, 2.0, currentAngle, viewProjMatrix);
+                // 画面板
+                drawPlane(gl, planeProgram, planeObject, diffuseMap, normalMap, 0.0, currentAngle, viewProjMatrix);
+                requestAnimationFrame(tick, canvas);
+            };
+            tick();
+        }
+
+        function initVertexBuffers(gl) {
+            //    v6----- v5
+            //   /|      /|
+            //  v1------v0|
+            //  | |      | |
+            //  | |v7---|-|v4
+            //  |/      |/
+            //  v2------v3
+
+            var vertices = new Float32Array([  
+               1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0,    // v0-v1-v2-v3 front
+               1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0,    // v0-v3-v4-v5 right
+               1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0,    // v0-v5-v6-v1 up
+              -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0,    // v1-v6-v7-v2 left
+              -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,    // v7-v4-v3-v2 down
+               1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0     // v4-v7-v6-v5 back
+            ]);
+
+            var indices = new Uint8Array([        
+               0, 1, 2, 0, 2, 3,    // front
+               4, 5, 6, 4, 6, 7,    // right
+               8, 9, 10, 8, 10, 11,    // up
+              12, 13, 14, 12, 14, 15,    // left
+              16, 17, 18, 16, 18, 19,    // down
+              20, 21, 22, 20, 22, 23     // back
+            ]);
+
+            var o = new Object(); // U
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer  || !o.indexBuffer) return null;
+
+            o.numIndices = indices.length;
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        function testQuad(gl) {
+            var verticesCoords = new Float32Array([
+             -1.0, 1.0, 0.0,
+             -1.0, -1.0, 0.0,
+              1.0, -1.0, 0.0, 
+              1.0, 1.0, 0.0
+            ]);
+
+            var indices = new Uint8Array([      
+                0, 1, 2, 0, 2, 3   // front
+            ]);
+            var n = indices.length; 
+
+            var o = {};
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            o.numIndices = indices.length;0
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        //初始化相关数据
+        function initPlaneVertexBuffers(gl) {
+            var pos1 = new Vector3([-1.0, 1.0, 0.0]);
+            var pos2 = new Vector3([-1.0, -1.0, 0.0]);
+            var pos3 = new Vector3([1.0, -1.0, 0.0]);
+            var pos4 = new Vector3([1.0, 1.0, 0.0]);
+            var verticesCoords = new Float32Array([
+              // 顶点数据
+              -1.0, 1.0, 0.0,
+              -1.0, -1.0, 0.0,
+               1.0, 1.0, 0.0,
+               1.0, -1.0, 0.0
+            ]);
+            var texCoords = new Float32Array([
+              //纹理坐标
+              0.0, 1.0,
+              0.0, 0.0,
+              1.0, 0.0,
+              1.0, 1.0
+            ]);
+            //法向量
+            var nm = [0.0, 0.0, 1.0];
+
+            var indices = new Uint8Array([        
+                0, 1, 2, 0, 2, 3   // front
+            ]);
+            var n = indices.length; 
+             //初始化切线向量
+            var tangent1 = new Vector3();
+            var bitangent1 = new Vector3();
+            var tangent2 = new Vector3();
+            var bitangent2 = new Vector3();
+
+            var edge1 = pos2.sub(pos1);
+            var edge2 = pos3.sub(pos1);
+            var deltaUV1 = [texCoords[2] - texCoords[0], texCoords[3] - texCoords[1]];
+            var deltaUV2 = [texCoords[4] - texCoords[0], texCoords[5] - texCoords[1]];
+             //计算切线向量
+            var f = 1.0 / (deltaUV1[0] * deltaUV2[1] - deltaUV2[0] * deltaUV1[1]);
+            tangent1.elements[0] = f * (deltaUV2[1] * edge1.elements[0] - deltaUV1[1] * edge2.elements[0]);
+            tangent1.elements[1] = f * (deltaUV2[1] * edge1.elements[1] - deltaUV1[1] * edge2.elements[1]);
+            tangent1.elements[2] = f * (deltaUV2[1] * edge1.elements[2] - deltaUV1[1] * edge2.elements[2]);
+
+            bitangent1.elements[0] = f * (-deltaUV2[0] * edge1.elements[0] + deltaUV1[0] * edge2.elements[0]);
+            bitangent1.elements[1] = f * (-deltaUV2[0] * edge1.elements[1] + deltaUV1[0] * edge2.elements[1]);
+            bitangent1.elements[2] = f * (-deltaUV2[0] * edge1.elements[2] + deltaUV1[0] * edge2.elements[2]);
+
+            edge1 = pos3.sub(pos1);
+            edge2 = pos4.sub(pos1);
+            var deltaUV1 = [texCoords[4] - texCoords[0], texCoords[5] - texCoords[1]];
+            var deltaUV2 = [texCoords[6] - texCoords[0], texCoords[7] - texCoords[1]];
+
+            f = 1.0 / (deltaUV1[0] * deltaUV2[1] - deltaUV2[0] * deltaUV1[1]);
+            tangent2.elements[0] = f * (deltaUV2[1] * edge1.elements[0] - deltaUV1[1] * edge2.elements[0]);
+            tangent2.elements[1] = f * (deltaUV2[1] * edge1.elements[1] - deltaUV1[1] * edge2.elements[1]);
+            tangent2.elements[2] = f * (deltaUV2[1] * edge1.elements[2] - deltaUV1[1] * edge2.elements[2]);
+
+            bitangent2.elements[0] = f * (-deltaUV2[0] * edge1.elements[0] + deltaUV1[0] * edge2.elements[0]);
+            bitangent2.elements[1] = f * (-deltaUV2[0] * edge1.elements[1] + deltaUV1[0] * edge2.elements[1]);
+            bitangent2.elements[2] = f * (-deltaUV2[0] * edge1.elements[2] + deltaUV1[0] * edge2.elements[2]);
+            //存储顶点数据
+            var quadVertices = new Float32Array([
+                pos1.elements[0], pos1.elements[1], pos1.elements[2], nm[0], nm[1], nm[2], texCoords[0], texCoords[1],tangent1.elements[0], tangent1.elements[1], tangent1.elements[2], bitangent1.elements[0], bitangent1.elements[1], bitangent1.elements[2],
+                pos2.elements[0], pos2.elements[1], pos2.elements[2], nm[0], nm[1], nm[2], texCoords[2], texCoords[3],tangent1.elements[0], tangent1.elements[1], tangent1.elements[2], bitangent1.elements[0], bitangent1.elements[1], bitangent1.elements[2],
+                pos3.elements[0], pos3.elements[1], pos3.elements[2], nm[0], nm[1], nm[2], texCoords[4], texCoords[5],tangent1.elements[0], tangent1.elements[1], tangent1.elements[2], bitangent1.elements[0], bitangent1.elements[1], bitangent1.elements[2],
+                pos4.elements[0], pos4.elements[1], pos4.elements[2], nm[0], nm[1], nm[2], texCoords[6], texCoords[7], tangent2.elements[0], tangent2.elements[1], tangent2.elements[2], bitangent2.elements[0], bitangent2.elements[1], bitangent2.elements[2]
+            ]);
+
+            var o = {};
+            o.quadVerticesBuffer = initArrayBufferForLaterUse(gl, quadVertices, 14, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            o.numIndices = indices.length;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        function initTextures(gl, program, url,location,index) {
+            var texture = gl.createTexture();  
+            var image = new Image();       
+            image.onload = function () {
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);  
+                gl.activeTexture(gl.TEXTURE0+index);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+                gl.uniform1i(location, index);
+                gl.bindTexture(gl.TEXTURE_2D, null); // Unbind texture
+            };
+            image.src = url;
+
+            return texture;
+        }
+
+        function drawLight(gl, program, o, x, angle, viewProjMatrix) {
+            gl.useProgram(program);  
+
+            var vertexBuffer = o.vertexBuffer;
+            var fsize = vertexBuffer.FSIZE;
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            initAttributeVariable(gl, program.a_Position, 3, vertexBuffer.num * fsize, 0 * fsize); 
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer); 
+
+            drawLightCube(gl, program, o, x, angle, viewProjMatrix);  
+        }
+
+        function drawPlane(gl, program, o, texture,texture_normal, x, angle, viewProjMatrix) {
+            gl.useProgram(program);
+
+            gl.uniform3f(program.u_lightColor, 0.5, 0.5, 0.5);
+            light_Pos.elements[0] = Math.cos(angle / 180 * Math.PI) * 3.0;
+            light_Pos.elements[2] = Math.sin(angle / 180 * Math.PI) * 3.0;
+            gl.uniform3f(program.u_lightPos, light_Pos.elements[0], light_Pos.elements[1], light_Pos.elements[2]);
+            gl.uniform3f(program.u_viewPos, cameraPos[0], cameraPos[1], cameraPos[2]);
+
+            var quadVerticesBuffer = o.quadVerticesBuffer;
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadVerticesBuffer);
+            var fsize = quadVerticesBuffer.FSIZE;
+            initAttributeVariable(gl, program.a_Position, 3, quadVerticesBuffer.num * fsize, 0 * fsize); // Vertex coordinates
+            initAttributeVariable(gl, program.a_Normal, 3, quadVerticesBuffer.num * fsize, 3 * fsize);// Normal
+            initAttributeVariable(gl, program.a_TexCoord, 2, quadVerticesBuffer.num * fsize, 6 * fsize);   // Texture coordinates
+            initAttributeVariable(gl, program.aTangent, 3, quadVerticesBuffer.num * fsize, 8 * fsize);   // tangent
+            initAttributeVariable(gl, program.aBitangent, 3, quadVerticesBuffer.num * fsize, 11 * fsize);   // bitangent
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);  
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, texture_normal);
+            drawQuad(gl, program, o, x, angle, viewProjMatrix);
+        }
+
+
+        function initAttributeVariable(gl, a_attribute,num,stride, offset) {
+
+            gl.vertexAttribPointer(a_attribute, num, gl.FLOAT, false, stride, offset);
+            gl.enableVertexAttribArray(a_attribute);
+        }
+
+        function drawQuad(gl, program, o, x, angle, viewProjMatrix) {
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+
+            g_modelMatrix.setTranslate(0.0, 0.0, 0.0);
+            g_modelMatrix.rotate(-60.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.scale(4, 4, 1);
+
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+
+            g_normalMatrix.setInverseOf(g_modelMatrix);
+            g_normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.u_ModelMatrix, false, g_modelMatrix.elements);
+            gl.uniformMatrix4fv(program.u_MvpMatrix, false, g_mvpMatrix.elements);
+            gl.uniformMatrix4fv(program.u_NormalMatrix, false, g_normalMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);   
+        }
+
+
+        function drawLightCube(gl, program, o, x, angle, viewProjMatrix) {
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+            // Calculate a model matrix
+            g_modelMatrix.translate(light_Pos.elements[0], light_Pos.elements[1], light_Pos.elements[2]);
+            g_modelMatrix.rotate(20.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.scale(0.1, 0.1, 0.1);
+
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+            gl.uniformMatrix4fv(program.u_lightmvpMatrix, false, g_mvpMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);  
+        }
+
+        function initArrayBufferForLaterUse(gl, data, num, type) {
+            var buffer = gl.createBuffer();   
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+         
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.num = num;
+            buffer.type = type;
+            buffer.FSIZE = data.BYTES_PER_ELEMENT;
+
+            return buffer;
+        }
+
+        function initElementArrayBufferForLaterUse(gl, data, type) {
+            var buffer = gl.createBuffer();　  
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.type = type;
+
+            return buffer;
+        }
+
+        var ANGLE_STEP = 30;  
+        var last = Date.now(); 
+        function animate(angle) {
+            var now = Date.now();   
+            var elapsed = now - last;
+            last = now;
+            var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+            return newAngle % 360;
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="webgl" width="512" height="512">
+        Please use a browser that supports "canvas"
+    </canvas>
+    <p>1、刚开始效果出不来，也检查了矩阵转换有没有问题，
+    <br />想到可能是灯光太亮，调小灯光强度，环境光和镜面光都做了微调，效果出来了，证明光照强度会对法线贴图效果影响很大。</p>
+    <p>2、法线贴图的实质是，在计算和所有光照有关的法线向量的时候，不再采用完全平面的法线，而是采用我们的存有法线向量信息的的贴图来算，这样，可以看出，每个片元的法线实质是不一样的，就会给我们一种凹凸不平的感觉。</p>
+    <p>3、另外，一张法线贴图的纹理中，存储的法线向量是固定不变的，如果模型简单还好，一旦模型复杂，有成千上万的面，并且模型矩阵实在不停变化，就用不了了。解决的办法就是定义一个切线空间，法线保持z值不变，但是光照方向在变。问题的核心就是求切线空间和变换为世界坐标的变换矩阵</p>
+ </body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>深度测试</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix.js"></script>
+    <script type="text/javascript">
+        //顶点着色器
+        var VSHADER_SOURCE =
+          `attribute vec4 a_Position;
+           attribute vec2 a_TexCoord;
+           //attribute vec4 a_Normal;
+           uniform mat4 u_MvpMatrix;
+           //uniform mat4 u_NormalMatrix;
+           varying vec2 v_TexCoord;
+           void main() { 
+               v_TexCoord = a_TexCoord;
+               gl_Position = u_MvpMatrix * a_Position;
+           }`;
+
+        // 片元着色器
+        var FSHADER_SOURCE =
+          `#ifdef GL_ES
+            precision mediump float;
+           #endif
+           varying vec2 v_TexCoord;
+           uniform sampler2D u_Sampler;
+           void main() {
+               gl_FragColor =texture2D(u_Sampler, v_TexCoord);
+           }`;
+
+        
+        var depthFunc = 'LESS';
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webgl');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // 生成着色器程序
+            var program = createProgram(gl, VSHADER_SOURCE, FSHADER_SOURCE);
+            if (!program) {
+                console.log('初始化着色器程序失败');
+                return;
+            }
+
+            // 获取着色器程序中的变量的location
+            program.a_Position = gl.getAttribLocation(program, 'a_Position');
+            program.a_TexCoord = gl.getAttribLocation(program, 'a_TexCoord');
+            program.u_MvpMatrix = gl.getUniformLocation(program, 'u_MvpMatrix');
+            program.u_Sampler = gl.getUniformLocation(program, 'u_Sampler');
+
+            // 创建cube对象
+            var cube = initVertexBuffers(gl);
+            if (!cube) {
+                console.log('创建cube对象失败');
+                return;
+            }
+            var plane = initPlaneVertexBuffers(gl);
+            // 设置纹理
+            var textureCube = initTextures(gl, program, '../images/marble.jpg', 0);
+            var texturePlane = initTextures(gl, program, '../images/metal.png', 1);
+            if (!textureCube||!texturePlane) {
+                console.log('Failed to intialize the texture.');
+                return;
+            }
+            // 开启深度测试
+            gl.enable(gl.DEPTH_TEST);
+            
+            // 计算相机矩阵
+            var viewProjMatrix = new Matrix4();
+            viewProjMatrix.setPerspective(30.0, canvas.width / canvas.height, 1.0, 100.0);
+            viewProjMatrix.lookAt(0.0, 0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+            // 开始绘制
+            var currentAngle = 10.0; // 初始化角度为0
+            var tick = function () {
+                gl.depthFunc(gl[depthFunc]);
+                //currentAngle = animate(currentAngle);  // 更新当前旋转角
+                gl.clearColor(0.0, 0.0, 0.0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // 清除缓冲区
+                //画平面
+                gl.useProgram(program);
+                //绘制两个立方体
+                drawCubeObject(gl, program, cube, textureCube, -0.6, currentAngle, 1.0, viewProjMatrix,-1.0);
+                drawCubeObject(gl, program, cube, textureCube, 1.0, currentAngle,1.0, viewProjMatrix,1.0);
+                drawPlaneObject(gl, program, plane, texturePlane, 0.0, currentAngle, viewProjMatrix);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+                requestAnimationFrame(tick, canvas);
+            };
+            tick();
+            domEvent();
+        }
+
+        function initVertexBuffers(gl) {
+            // Create a cube
+            //    v6----- v5
+            //   /|      /|
+            //  v1------v0|
+            //  | |     | |
+            //  | |v7---|-|v4
+            //  |/      |/
+            //  v2------v3
+
+            var vertices = new Float32Array([   // Vertex coordinates
+               1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0,    // v0-v1-v2-v3 front
+               1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0,    // v0-v3-v4-v5 right
+               1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0,    // v0-v5-v6-v1 up
+              -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0,    // v1-v6-v7-v2 left
+              -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,    // v7-v4-v3-v2 down
+               1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0     // v4-v7-v6-v5 back
+            ]);
+
+            var normals = new Float32Array([   // Normal
+               0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,     // v0-v1-v2-v3 front
+               1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,     // v0-v3-v4-v5 right
+               0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,     // v0-v5-v6-v1 up
+              -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0,     // v1-v6-v7-v2 left
+               0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0,     // v7-v4-v3-v2 down
+               0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0      // v4-v7-v6-v5 back
+            ]);
+
+            var texCoords = new Float32Array([   // Texture coordinates
+               1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,    // v0-v1-v2-v3 front
+               0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0,    // v0-v3-v4-v5 right
+               1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0,    // v0-v5-v6-v1 up
+               1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,    // v1-v6-v7-v2 left
+               0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,    // v7-v4-v3-v2 down
+               0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0     // v4-v7-v6-v5 back
+            ]);
+
+            var indices = new Uint8Array([        // Indices of the vertices
+               0, 1, 2, 0, 2, 3,    // front
+               4, 5, 6, 4, 6, 7,    // right
+               8, 9, 10, 8, 10, 11,    // up
+              12, 13, 14, 12, 14, 15,    // left
+              16, 17, 18, 16, 18, 19,    // down
+              20, 21, 22, 20, 22, 23     // back
+            ]);
+
+            var o = new Object(); // 创建一个对象，用于附属所有需要用到的数据
+
+            // 顶点数据
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.normalBuffer = initArrayBufferForLaterUse(gl, normals, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer || !o.normalBuffer || !o.texCoordBuffer || !o.indexBuffer) return null;
+
+            o.numIndices = indices.length;
+
+            // 解绑缓冲区
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        //初始地板plane的相关数据
+        function initPlaneVertexBuffers(gl) {
+            var verticesCoords = new Float32Array([
+             // 顶点纹理坐标
+             -1.0, 1.0, 0.0,
+             -1.0, -1.0, 0.0,
+              1.0, -1.0, 0.0,
+              1.0, 1.0, 0.0
+            ]);
+
+            var texCoords = new Float32Array([
+             // 纹理坐标
+             0.0, 1.0,
+             0.0, 0.0,
+             1.0, 0.0,
+             1.0, 1.0
+            ]);
+            //索引数据
+            var indices = new Uint8Array([
+                0, 1, 2, 0, 2, 3   // front
+            ]);
+            var n = indices.length; // 顶点个数
+
+            var o = {};
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            o.numIndices = indices.length;
+
+            // 解绑缓冲区数据
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        function initTextures(gl, program,url,i) {
+            var texture = gl.createTexture();   // Create a texture object
+            if (!texture) {
+                console.log('Failed to create the texture object');
+                return null;
+            }
+
+            var image = new Image();  // Create a image object
+            if (!image) {
+                console.log('Failed to create the image object');
+                return null;
+            }
+            // 图片异步加载完成后，填充纹理数据
+            image.onload = function () {
+                // 写入图像数据
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);  // Flip the image Y coordinate
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+                //设置采样器的纹理单元
+                gl.useProgram(program);
+                gl.uniform1i(program.u_Sampler, 0);
+
+                gl.bindTexture(gl.TEXTURE_2D, null); 
+            };
+
+            //图片路径
+            image.src = url;
+            texture.index = i;
+            return texture;
+        }
+        //绘制盒子对象
+        function drawCubeObject(gl, program, o,texture, x, angle,scale, viewProjMatrix,z) {
+            if (program.a_Position != undefined && program.a_Position != null)
+                initAttributeVariable(gl, program.a_Position, o.vertexBuffer);  
+            if (program.a_TexCoord != undefined && program.a_TexCoord != null)
+                initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer); 
+
+            if (texture) {
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+            }
+            drawCube(gl, program, o, x, angle,scale, viewProjMatrix,z); 
+            
+        }
+        //绘制plane平面对象
+        function drawPlaneObject(gl, program, o, texture, x, angle, viewProjMatrix) {
+            initAttributeVariable(gl, program.a_Position, o.vertexBuffer); 
+            initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);  
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);  
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            drawQuad(gl, program, o, x, angle, viewProjMatrix); 
+
+        }
+
+        // 分配缓冲区数据
+        function initAttributeVariable(gl, a_attribute, buffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
+            gl.enableVertexAttribArray(a_attribute);
+        }
+        
+        //绘制正方形
+        function drawQuad(gl, program, o, x, angle, viewProjMatrix) {
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+            //计算模型矩阵
+            g_modelMatrix.setTranslate(x, -1.0, 0.0);
+            g_modelMatrix.rotate(110.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.rotate(angle, 0.0, 0.0, 1.0);
+            g_modelMatrix.scale(5.0, 5.0, 5.0);
+            // 传入矩阵数据到着色器中
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+            gl.uniformMatrix4fv(program.u_MvpMatrix, false, g_mvpMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);   // Draw
+        }
+        //绘制立方体对象
+        function drawCube(gl, program, o, x, angle,scale, viewProjMatrix,z) {
+            // Coordinate transformation matrix
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+            // 计算模型矩阵
+            g_modelMatrix.rotate(20.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.rotate(angle, 0.0, 1.0, 0.0);
+            g_modelMatrix.scale(scale, scale, scale);
+            g_modelMatrix.translate(x, 0.0, z);
+
+            g_normalMatrix.setInverseOf(g_modelMatrix);
+            g_normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.u_NormalMatrix, false, g_normalMatrix.elements);
+
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+            gl.uniformMatrix4fv(program.u_MvpMatrix, false, g_mvpMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);   // Draw
+        }
+
+        function initArrayBufferForLaterUse(gl, data, num, type) {
+            var buffer = gl.createBuffer();   // Create a buffer object
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            // 将数据写入缓冲区
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            //配置必要参数
+            buffer.num = num;
+            buffer.type = type;
+
+            return buffer;
+        }
+
+        function initElementArrayBufferForLaterUse(gl, data, type) {
+            var buffer = gl.createBuffer();　  // 创建缓冲区对象
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            //写入缓冲区数据
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.type = type;
+
+            return buffer;
+        }
+
+        var ANGLE_STEP = 30;   
+
+        var last = Date.now();
+        //计算当前的旋转角度 
+        function animate(angle) {
+            var now = Date.now();   
+            var elapsed = now - last;
+            last = now;
+            var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+            return newAngle % 360;
+        }
+        function domEvent() {
+          less.onclick = function (e) {
+            depthFunc = 'LESS';
+          }
+          always.onclick = function(e) {
+            depthFunc = 'ALWAYS';
+          } 
+        }
+    </script>
+</head>
+<body onload="main()">
+    <div style="margin:0 auto;width:512px;height:512px">
+        <canvas id="webgl" width="512" height="512">
+            Please use a browser that supports "canvas"
+        </canvas>
+    </div>
+    <div style="margin:0 auto;width:200px">
+     <input id='less' type="radio" name="LESS" checked="true">LESS
+     <input id='always' type="radio" name="LESS">ALWAYS
+    </div>
+</body>
+</html>

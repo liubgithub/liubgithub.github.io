@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>阴影贴图</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix.js"></script>
+    <script type="text/javascript">
+        //
+        var g_buffer_vs = `
+           #ifdef GL_ES
+             precision highp float;
+           #endif
+           attribute vec3 a_Position;
+           attribute vec4 a_Normal;
+           //attribute vec4 a_Color;
+           attribute vec2 a_TexCoords;
+
+           varying vec3 v_FragPos;
+           varying vec2 v_TexCoords;
+           varying vec3 v_Normal;
+           //varying vec4 v_Color;
+
+           uniform mat4 u_modelMatrix;
+           uniform mat4 u_normalMatrix;
+           uniform mat4 u_mvpMatrix;
+
+           void main(){
+               vec4 worldPos = u_modelMatrix * vec4(a_Position, 1.0);
+               v_FragPos = worldPos.xyz;
+               v_TexCoords = a_TexCoords;
+
+               v_Normal = vec3(u_normalMatrix *a_Normal);
+               gl_Position = u_mvpMatrix * vec4(a_Position, 1.0);
+               //v_Color = a_Color;
+           } 
+        `;
+        //
+        var g_buffer_fs = `
+          //引入draw_buffers插件
+          #extension GL_EXT_draw_buffers:require
+          precision highp float;
+          varying vec2 v_TexCoords;
+          varying vec3 v_FragPos;
+          varying vec3 v_Normal;
+          //varying vec4 v_Color;
+
+          uniform sampler2D texture_diffuse1;
+          uniform sampler2D texture_specular1;
+
+          void main()
+          {
+            gl_FragData[0] = vec4(v_FragPos,1.0);
+            gl_FragData[1] = vec4(normalize(v_Normal),1.0);
+            //用高光贴图的r分量来存alph值
+            gl_FragData[2] = vec4(texture2D(texture_diffuse1, v_TexCoords).rgb,texture2D(texture_specular1, v_TexCoords).r);
+          }
+        `;
+
+        var defferred_shading_vs = `
+           attribute vec3 aPos;
+           attribute vec2 aTexCoords;
+
+           varying vec2 TexCoords;
+           void main(){
+            TexCoords = aTexCoords;
+            gl_Position = vec4(aPos, 1.0);
+           }
+        `;
+        
+        var defferred_shading_fs = `
+            #ifdef GL_ES
+               precision highp float;
+            #endif
+            varying vec2 TexCoords;
+
+            uniform sampler2D gPosition;
+            uniform sampler2D gNormal;
+            uniform sampler2D gAlbedoSpec;
+
+            struct Light {
+              vec3 Position;
+              vec3 Color;
+
+              float Linear;
+              float Quadratic;
+            };
+
+            const int NR_LIGHTS = 96;
+            uniform Light lights[NR_LIGHTS];
+            uniform vec3 viewPos;
+
+            void main()
+            {
+               // retrieve data from gbuffer
+               vec3 FragPos = texture2D(gPosition, TexCoords).rgb;
+               vec3 Normal = texture2D(gNormal, TexCoords).rgb;
+               vec3 Diffuse = texture2D(gAlbedoSpec, TexCoords).rgb;
+               float Specular = texture2D(gAlbedoSpec, TexCoords).a;
+    
+                // then calculate lighting as usual
+               vec3 lighting  = Diffuse * 0.5; // hard-coded ambient component
+               vec3 viewDir  = normalize(viewPos - FragPos);
+               for(int i = 0; i < NR_LIGHTS; ++i)
+              {
+
+                  // diffuse
+                vec3 lightDir = normalize(lights[i].Position - FragPos);
+                vec3 diffuse = max(dot(Normal, lightDir), 0.0) * Diffuse * lights[i].Color;
+                // specular
+                vec3 halfwayDir = normalize(lightDir + viewDir);  
+                float spec = pow(max(dot(Normal, halfwayDir), 0.0),16.0);
+                vec3 specular = lights[i].Color * spec * Specular;
+                // attenuation
+                float distance = length(lights[i].Position - FragPos);
+                float attenuation = 1.0 / (1.0 + lights[i].Linear * distance + lights[i].Quadratic * distance * distance);
+                diffuse *= attenuation;
+                specular *= attenuation;
+                lighting += diffuse + specular;        
+              }
+              gl_FragColor = vec4(lighting, 1.0);
+            }
+        `;
+
+        var defferred_light_box_vs = `
+        #ifdef GL_ES
+          precision highp float;
+        #endif
+        attribute vec3 aPos;
+        uniform mat4 mvpMatrix;
+
+        void main(){
+           gl_Position = mvpMatrix*vec4(aPos, 1.0);
+        }
+        `;
+
+        var defferred_light_box_fs = `
+          #ifdef GL_ES
+            precision highp float;
+          #endif
+          uniform vec3 lightColor;
+          void main(){
+            gl_FragColor = vec4(lightColor, 1.0);
+          }
+        `;
+
+        var OFFSCREEN_WIDTH,OFFSCREEN_HEIGHT;
+        var LIGHT_X = 2.0, LIGHT_Y =6.0, LIGHT_Z = 2.0; //定义定光的位置
+        var currentAngle = 0.0;//当前角度 
+        var lightPositions = [];
+        var lightColors = [];
+        var cameraPos = [10.0, 2.0, 10.0];
+        var canvas;
+        var ext;
+        //灯光的数量
+        var lightCount = 96;
+        function main() {
+            canvas = document.getElementById('webgl');
+            OFFSCREEN_WIDTH=canvas.width;
+            OFFSCREEN_HEIGHT=canvas.height
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('获取webglcontext失败');
+                return;
+            }
+            ext = gl.getExtension("WEBGL_draw_buffers");
+            //初始化几何渲染阶段的着色器
+            var shaderGeometryPass = createProgram(gl, g_buffer_vs, g_buffer_fs);
+            var shaderLightingPass = createProgram(gl,defferred_shading_vs,defferred_shading_fs);
+            shaderGeometryPass.a_Position = gl.getAttribLocation(shaderGeometryPass, 'a_Position');
+            shaderGeometryPass.a_Normal = gl.getAttribLocation(shaderGeometryPass, 'a_Normal');
+            //shaderGeometryPass.a_Color = gl.getAttribLocation(shaderGeometryPass, 'a_Color');
+            shaderGeometryPass.a_TexCoords = gl.getAttribLocation(shaderGeometryPass, 'a_TexCoords');
+            shaderGeometryPass.diffuse_sampler = gl.getUniformLocation(shaderGeometryPass, 'texture_diffuse1');
+            shaderGeometryPass.specular_sampler = gl.getUniformLocation(shaderGeometryPass, 'texture_specular1');
+            shaderGeometryPass.u_modelMatrix = gl.getUniformLocation(shaderGeometryPass, 'u_modelMatrix');
+            shaderGeometryPass.u_normalMatrix = gl.getUniformLocation(shaderGeometryPass, 'u_normalMatrix');
+            shaderGeometryPass.u_mvpMatrix = gl.getUniformLocation(shaderGeometryPass, 'u_mvpMatrix');
+            // 延迟光照处理阶段的着色器
+            var shaderLightingPass = createProgram(gl,defferred_shading_vs,defferred_shading_fs);
+            shaderLightingPass.aPos = gl.getAttribLocation(shaderLightingPass, 'aPos');
+            shaderLightingPass.aTexCoords = gl.getAttribLocation(shaderLightingPass, 'aTexCoords');
+            shaderLightingPass.gPosition = gl.getUniformLocation(shaderLightingPass, 'gPosition');
+            shaderLightingPass.gNormal = gl.getUniformLocation(shaderLightingPass, 'gNormal');
+            shaderLightingPass.NR_LIGHTS = gl.getUniformLocation(shaderLightingPass, 'NR_LIGHTS');
+            shaderLightingPass.gAlbedoSpec = gl.getUniformLocation(shaderLightingPass, 'gAlbedoSpec');
+            shaderLightingPass.viewPos = gl.getUniformLocation(shaderLightingPass, 'viewPos');
+             
+            //设置灯光的参数
+            setLight(gl,shaderLightingPass);
+            //輔助繪製燈光的
+            var shaderLightBox = createProgram(gl,defferred_light_box_vs,defferred_light_box_fs);
+            shaderLightBox.a_Position = gl.getAttribLocation(shaderLightBox,'aPos');
+            shaderLightBox.u_mvpMatrix = gl.getUniformLocation(shaderLightBox,'mvpMatrix');
+            shaderLightBox.lightColor = gl.getUniformLocation(shaderLightBox,'lightColor');
+            
+            
+            var objectPositions = [
+            [-3.0,  -3.0, -3.0],
+            [0.0,  -3.0, -3.0],
+            [3.0,  -3.0, -3.0],
+            [-3.0,  -3.0,  0.0],
+            [0.0,  -3.0,  0.0],
+            [3.0,  -3.0,  0.0],
+            [-3.0,  -3.0,  3.0],
+            [0.0,  -3.0,  3.0],
+            [3.0,  -3.0,  3.0]
+            ];
+
+            // I初始化G缓冲
+            var gBuffer = initFramebufferObject(gl);
+            if (!gBuffer) {
+                console.log('生成帧缓冲区失败');
+                return;
+            }
+            gl.useProgram(shaderLightingPass);
+            gl.uniform1i(shaderLightingPass.gPosition, 0);
+            gl.uniform1i(shaderLightingPass.gNormal, 1);
+            gl.uniform1i(shaderLightingPass.gAlbedoSpec, 2);
+
+            //配置箱子的顶点缓冲数据
+            shaderGeometryPass = initAttribueBuffers(gl,shaderGeometryPass);
+            gl.clearColor(0, 0, 0, 1);
+            gl.enable(gl.DEPTH_TEST);
+
+            var viewProjMatrix = new Matrix4();       
+            viewProjMatrix.setPerspective(45, canvas.width / canvas.height, 1.0, 100.0);
+            viewProjMatrix.lookAt(cameraPos[0],cameraPos[1],cameraPos[2], 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+            var cube = initVertexBuffersForCuble(gl);
+            var tick = function () {
+                currentAngle = animate(currentAngle); 
+                gl.enable(gl.DEPTH_TEST);
+                updateLightPos(); 
+                gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);   
+                // 清除帧缓冲区的绘制
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);              // 转换到帧缓冲区中绘制 
+                gl.useProgram(shaderGeometryPass); // 切换至阴影绘制着色器程序，画多个箱子
+                for(var i=0;i<objectPositions.length;i++){
+                  var g_model = new Matrix4();
+                  g_model.translate(objectPositions[i][0],objectPositions[i][1],objectPositions[i][2]);
+                  g_model.scale(0.5,0.5,0.5);
+                  if(shaderGeometryPass.cube)
+                    drawCube(gl,shaderGeometryPass,shaderGeometryPass.cube,true,g_model,viewProjMatrix);
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null); //解除帧缓冲的绑定             
+                // 清除
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);  
+                gl.useProgram(shaderLightingPass); // 切换至灯光渲染着色器程序
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, gBuffer.gPosition);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, gBuffer.gNormal);
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_2D, gBuffer.gAlbedoSpec);
+                for(var j=0;j<lightPositions.length;j++){
+                  gl.uniform3f(shaderLightingPass.lights[j].Position,lightPositions[j][0],lightPositions[j][1],lightPositions[j][2]);
+                  gl.uniform3f(shaderLightingPass.lights[j].Color,lightColors[j][0],lightColors[j][1],lightColors[j][2]);
+                  var constant = 1.0;
+                  var linear = 0.09;
+                  var quadratic = 0.256;
+                  gl.uniform1f(shaderLightingPass.lights[j].Linear,linear);
+                  gl.uniform1f(shaderLightingPass.lights[j].Quadratic,quadratic);
+                }
+                gl.uniform3f(shaderLightingPass.viewPos,cameraPos[0],cameraPos[1],cameraPos[2]);
+                drawQuad(gl,shaderLightingPass);
+                gl.disable(gl.DEPTH_TEST);
+                gl.useProgram(shaderLightBox);
+                for(var k = 0;k<lightPositions.length;k++) {
+                   drawLight(gl, shaderLightBox, cube, lightPositions[k], lightColors[k], viewProjMatrix);
+                }
+                
+                window.requestAnimationFrame(tick, canvas);
+            };
+            tick();
+            domEvent();
+           /*gl.useProgram(shaderGeometryPass); // 此处的代码用于调试几何着色阶段是否正确
+           var draw = function () {
+                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                   
+                for(var i=0;i<objectPositions.length-8;i++){
+                  var g_model = new Matrix4();
+                  g_model.translate(objectPositions[i][0],objectPositions[i][1],objectPositions[i][2]);
+                  g_model.scale(0.5,0.5,0.5);
+                   if(shaderGeometryPass.cube)
+                    drawCube(gl,shaderGeometryPass,shaderGeometryPass.cube,true,g_model,viewProjMatrix);
+                     //drawModel(gl,shaderGeometryPass,10,g_model,viewProjMatrix,model);
+                }
+              requestAnimationFrame(draw, canvas);
+           }
+           draw();*/
+        }
+        function initAttribueBuffers(gl,program){
+            //载入模型
+            //生成cube、plane和纹理对象
+            var cube = initVertexBuffersForCuble(gl);
+            var plane = initVertexBuffersForPlane(gl);
+            var texture_diffuse1 = initTextures(gl,program,program.diffuse_sampler,'../images/container2.png',0);
+            var texture_specular1 = initTextures(gl,program,program.specular_sampler,'../images/container2_specular.png',1);
+            program.cube = cube;
+            program.plane = plane;
+            program.texture_specular1 = texture_specular1;
+            program.texture_diffuse1 = texture_diffuse1;
+            return program;
+        }
+        // 绘制cube，参数依次为gl,program,要绘制的对象，是否有纹理生成，模型矩阵，vp矩阵
+        function drawCube(gl, program, cuble,texture,model, viewProjMatrix) {
+            var d_mvpMatrix = new Matrix4();
+            var d_normalMatrix = new Matrix4();
+            gl.uniformMatrix4fv(program.u_modelMatrix, false, model.elements);
+            d_normalMatrix.setInverseOf(model);
+            d_normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.u_normalMatrix, false, d_normalMatrix.elements);
+            d_mvpMatrix.set(viewProjMatrix);
+            d_mvpMatrix.multiply(model);
+            draw(gl, program, cuble,texture, d_mvpMatrix);
+        }
+
+        function drawLight(gl, program, light, position,color, viewProjMatrix) {
+            var d_modelMatrix = new Matrix4();
+            var d_mvpMatrix = new Matrix4();
+            var d_normalMatrix = new Matrix4();
+            d_modelMatrix.translate(position[0],position[1],position[2]);
+            d_modelMatrix.scale(0.1, 0.1, 0.1);
+            d_mvpMatrix.set(viewProjMatrix);
+            d_mvpMatrix.multiply(d_modelMatrix);
+            gl.uniform3f(program.lightColor,color[0],color[1],color[2]);
+            draw(gl, program, light, null,d_mvpMatrix);
+        }
+
+        function drawQuad(gl,program){
+             var verticesTexCoords =new Float32Array([
+            // positions  // texture Coords
+            -1.0,  1.0, 0.0, 0.0, 1.0,
+            -1.0, -1.0, 0.0,0.0, 0.0,
+             1.0,  1.0, 0.0,1.0, 1.0,
+             1.0, -1.0, 0.0,1.0, 0.0
+             ]);
+             // Create the buffer object
+              var vertexTexCoordBuffer = gl.createBuffer();
+             // Bind the buffer object to target
+             gl.bindBuffer(gl.ARRAY_BUFFER, vertexTexCoordBuffer);
+             gl.bufferData(gl.ARRAY_BUFFER, verticesTexCoords, gl.STATIC_DRAW);
+
+             var FSIZE = verticesTexCoords.BYTES_PER_ELEMENT;
+             gl.vertexAttribPointer(program.aPos, 3, gl.FLOAT, false, FSIZE * 5, 0);
+             gl.enableVertexAttribArray(program.aPos);  // Enable the assignment of the buffer object
+
+             // Assign the buffer object to a_TexCoord variable
+             gl.vertexAttribPointer(program.aTexCoords, 2, gl.FLOAT, false, FSIZE * 5, FSIZE * 3);
+             gl.enableVertexAttribArray(program.aTexCoords);
+             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        function drawPlane(gl, program, plane,texture, viewProjMatrix) {
+            var d_modelMatrix = new Matrix4();
+            var d_mvpMatrix = new Matrix4();
+            var d_normalMatrix = new Matrix4();
+            d_modelMatrix.setTranslate(0.0, 1.0, -3.5);
+            d_modelMatrix.scale(3.0, 1.0, 3.0);
+            gl.uniformMatrix4fv(program.u_modelMatrix, false, d_modelMatrix.elements);
+            d_normalMatrix.setInverseOf(d_modelMatrix);
+            d_normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.u_NormalMatrix, false, d_normalMatrix.elements);
+            d_mvpMatrix.set(viewProjMatrix);
+            d_mvpMatrix.multiply(d_modelMatrix);
+            draw(gl, program, plane,texture, d_mvpMatrix);
+            return d_mvpMatrix;
+        }
+
+        function draw(gl, program, o,texture, mvpMatrix) {
+            initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
+            if (program.a_Normal&&o.normalBuffer)
+                initAttributeVariable(gl, program.a_Normal, o.normalBuffer);
+            if(program.a_TexCoords&& o.texCoordBuffer)
+                initAttributeVariable(gl, program.a_TexCoords, o.texCoordBuffer);
+            if(texture){
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, program.texture_diffuse1);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, program.texture_specular1);
+            }
+            gl.uniformMatrix4fv(program.u_mvpMatrix, false, mvpMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, gl.UNSIGNED_BYTE, 0);
+        }
+
+        function initAttributeVariable(gl, a_attribute, buffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
+            gl.enableVertexAttribArray(a_attribute);
+        }
+
+        function initVertexBuffersForPlane(gl) {
+            //  v1------v0
+            //  |       | 
+            //  |       |
+            //  |       |
+            //  v2------v3
+
+            var vertices = new Float32Array([
+              3.0, -1.7, 2.5, -3.0, -1.7, 2.5, -3.0, -1.7, -2.5, 3.0, -1.7, -2.5    // v0-v1-v2-v3
+            ]);
+            var normals = new Float32Array([    // Normal
+              0.0, 0.0, 1.0,
+              0.0, 0.0, 1.0,
+              0.0, 0.0, 1.0,
+              0.0, 0.0, 1.0// v0-v1-v2-v3 front
+            ]);
+            var texCoords = new Float32Array([
+             // 纹理坐标
+             0.0, 1.0,
+             0.0, 0.0,
+             1.0, 0.0,
+             1.0, 1.0
+            ]);
+            var indices = new Uint8Array([0, 1, 2, 0, 2, 3]);
+
+            var o = new Object(); 
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.normalBuffer = initArrayBufferForLaterUse(gl, normals, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords,2, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer || !o.indexBuffer) return null;
+
+            o.numIndices = indices.length;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+        //箱子的顶点数据对象
+        function initVertexBuffersForCuble(gl) {
+            // Create a cube
+            //    v6----- v5
+            //   /|      /|
+            //  v1------v0|
+            //  | |     | |
+            //  | |v7---|-|v4
+            //  |/      |/
+            //  v2------v3
+            var vertices = new Float32Array([   // Coordinates
+               1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, // v0-v1-v2-v3 front
+               1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, // v0-v3-v4-v5 right
+               1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, // v0-v5-v6-v1 up
+              -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, // v1-v6-v7-v2 left
+              -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, // v7-v4-v3-v2 down
+               1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0  // v4-v7-v6-v5 back
+            ]);
+
+            var normals = new Float32Array([    // Normal
+              0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,  // v0-v1-v2-v3 front
+              1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,  // v0-v3-v4-v5 right
+              0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,  // v0-v5-v6-v1 up
+             -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0,  // v1-v6-v7-v2 left
+              0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0,  // v7-v4-v3-v2 down
+              0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0   // v4-v7-v6-v5 back
+            ]);
+
+            //纹理坐标
+            var texCoords = new Float32Array([   // Texture coordinates
+               1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,    // v0-v1-v2-v3 front
+               0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0,    // v0-v3-v4-v5 right
+               1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0,    // v0-v5-v6-v1 up
+               1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,    // v1-v6-v7-v2 left
+               0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,    // v7-v4-v3-v2 down
+               0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0     // v4-v7-v6-v5 back
+            ]);
+            var indices = new Uint8Array([
+               0, 1, 2, 0, 2, 3,    // front
+               4, 5, 6, 4, 6, 7,    // right
+               8, 9, 10, 8, 10, 11,    // up
+              12, 13, 14, 12, 14, 15,    // left
+              16, 17, 18, 16, 18, 19,    // down
+              20, 21, 22, 20, 22, 23     // back
+            ]);
+
+            var o = new Object(); 
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.normalBuffer = initArrayBufferForLaterUse(gl, normals, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer || !o.indexBuffer || !o.normalBuffer) return null;
+
+            o.numIndices = indices.length;
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        //模型的顶点数据
+        function initVertexBuffersForModel(gl,model){
+            var vertices = new Float32Array(model.vertices);
+
+            var normals = new Float32Array(model.vertexNormals);
+
+            //纹理坐标
+            var texCoords = new Float32Array(model.textures);
+            var indices = new Uint8Array(model.indices);
+
+            var o = new Object(); 
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.normalBuffer = initArrayBufferForLaterUse(gl, normals, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer || !o.indexBuffer || !o.normalBuffer) return null;
+
+            o.numIndices = indices.length;
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        function initArrayBufferForLaterUse(gl, data, num, type) {
+            var buffer = gl.createBuffer();
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+            buffer.num = num;
+            buffer.type = type;
+
+            return buffer;
+        }
+
+        function initElementArrayBufferForLaterUse(gl, data, type) {
+            var buffer = gl.createBuffer();
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.type = type;
+
+            return buffer;
+        }
+        //载入纹理
+        function initTextures(gl, program,sampler,url,i) {
+            var texture = gl.createTexture();   // Create a texture object
+            if (!texture) {
+                console.log('Failed to create the texture object');
+                return null;
+            }
+
+            var image = new Image();  // Create a image object
+            if (!image) {
+                console.log('Failed to create the image object');
+                return null;
+            }
+            // 图片异步加载完成后，填充纹理数据
+            image.onload = function () {
+                // 写入图像数据
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);  
+                gl.activeTexture(gl.TEXTURE0+i);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                //设置采样器的纹理单元
+                gl.useProgram(program);
+                gl.uniform1i(sampler, i);
+
+                gl.bindTexture(gl.TEXTURE_2D, null); 
+            };
+
+            //图片路径
+            image.src = url;
+            texture.index = i;
+            return texture;
+        }
+         //配置帧缓冲区
+        function initFramebufferObject(gl) {
+            var gBuffer, gPosition, gNormal, gAlbedoSpec, depthTexture;
+             //在webgl1的情况下，加载一些插件
+             gl.getExtension("OES_texture_float_linear");
+             gl.getExtension("OES_texture_float");
+             gl.getExtension("OES_texture_half_float");
+             gl.getExtension("OES_texture_half_float_linear");
+             var extDepth = gl.getExtension("WEBGL_depth_texture");
+            var error = function () {
+                if (gBuffer) gl.deleteFramebuffer(gBuffer);
+                if (gPosition) gl.deleteTexture(gPosition);
+                if (gNormal) gl.deleteTexture(gNormal);
+                if (gAlbedoSpec) gl.deleteTexture(gAlbedoSpec);
+                if (depthBuffer) gl.deleteRenderbuffer(depthBuffer);
+                return null;
+            }
+
+            gBuffer = gl.createFramebuffer();
+            if (!gBuffer) {
+                console.log('Failed to create frame buffer object');
+                return error();
+            }
+            gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
+
+            var gPosition = gl.createTexture(); 
+            gl.bindTexture(gl.TEXTURE_2D, gPosition);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT, 0, gl.RGBA, gl.FLOAT, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            
+            var gNormal = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, gNormal);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT, 0, gl.RGBA, gl.FLOAT, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            
+            var gAlbedoSpec = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, gAlbedoSpec);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT, 0, gl.RGBA, gl.FLOAT, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            var attachments = [ ext.COLOR_ATTACHMENT0_WEBGL, ext.COLOR_ATTACHMENT1_WEBGL,ext.COLOR_ATTACHMENT2_WEBGL];
+            ext.drawBuffersWEBGL(attachments);
+
+            var depthBuffer = gl.createRenderbuffer(); 
+            if (!depthBuffer) {
+                console.log('Failed to create renderbuffer object');
+                return error();
+            }
+            //配置深度缓冲，此处必须，否则物体对象画的不正确
+            gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT);
+
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT0_WEBGL, gl.TEXTURE_2D, gPosition, 0);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT1_WEBGL, gl.TEXTURE_2D, gNormal, 0);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT2_WEBGL, gl.TEXTURE_2D, gAlbedoSpec, 0);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+
+            var e = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+            if (gl.FRAMEBUFFER_COMPLETE !== e) {
+                console.log('Frame buffer object is incomplete: ' + e.toString());
+                return error();
+            }
+
+            gBuffer.gPosition = gPosition; //配置深度纹理
+            gBuffer.gNormal = gNormal;
+            gBuffer.gAlbedoSpec = gAlbedoSpec;
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+            return gBuffer;
+        }
+        function setLight(gl,shaderLightingPass){
+           //设置灯光
+            AddLight();
+            shaderLightingPass.lights = [];
+            for (var i = 0; i < lightPositions.length; i++) {
+                shaderLightingPass.lights[i] = {};
+                shaderLightingPass.lights[i].Position = gl.getUniformLocation(shaderLightingPass, 'lights[' + i + '].Position');
+                shaderLightingPass.lights[i].Color = gl.getUniformLocation(shaderLightingPass, 'lights[' + i + '].Color');
+                shaderLightingPass.lights[i].Linear = gl.getUniformLocation(shaderLightingPass, 'lights[' + i + '].Linear');
+                shaderLightingPass.lights[i].Quadratic = gl.getUniformLocation(shaderLightingPass, 'lights[' + i + '].Quadratic');
+            }
+        }
+        //配置灯光的颜色和位置
+        function AddLight(gl){
+           lightPositions=[];
+           lightColors=[];
+           for(var i=0;i<lightCount;i++) {
+              var xPos = 0.0;
+              var yPos = 8.0*Math.random();
+              var zPos = -3.0*Math.random()-3.0;
+              lightPositions.push([xPos,yPos,zPos]);
+              var rColor = Math.random()*0.5+0.5;
+              var gColor = Math.random()*0.8+0.2;
+              var bColor = Math.random()*0.3+0.7;
+              lightColors.push([rColor,gColor,bColor]);
+           }
+        }
+        
+        //更新灯光的位置，让灯光运动起来
+        function updateLightPos(){
+           for(var i=0;i<lightPositions.length;i++){
+              if(i%3==0) {
+                 lightPositions[i][0] = lightPositions[i][0] + Math.cos(currentAngle / 180 * Math.PI) * (2.0)*Math.random();
+                 lightPositions[i][1] = lightPositions[i][1] + Math.sin(currentAngle / 180 * Math.PI) * 2.0*Math.random();
+              }
+              if(i%3==1) {
+                 lightPositions[i][0] = lightPositions[i][0] + Math.cos(currentAngle / 180 * Math.PI) * 2.0*Math.random();
+                 lightPositions[i][2] = lightPositions[i][2] + Math.sin(currentAngle / 180 * Math.PI) * 2.0*Math.random();
+              }
+              if(i%3==2) {
+                 lightPositions[i][1] = lightPositions[i][1] + Math.cos(currentAngle / 180 * Math.PI) * 2.0*Math.random();
+                 lightPositions[i][2] = lightPositions[i][2] + Math.sin(currentAngle / 180 * Math.PI) * 2.0*Math.random();
+              }
+           }
+        }
+        var ANGLE_STEP = 40;   
+    
+        var last = Date.now(); 
+        function animate(angle) {
+            var now = Date.now();  
+            var elapsed = now - last;
+            last = now;
+            var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+            return newAngle % 360;
+        }
+        function domEvent(){
+            lightCount.onchange = function(e){
+               lightCount = e.target.value;
+            }
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="webgl" width="768" height="768">
+        Please use a browser that supports "canvas"
+    </canvas>
+     <!--<input id='lightCount' type="range" name="heightscale" value=32>-->
+</body>
+</html>

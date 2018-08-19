@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>你好三角形</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix.js"></script>
+    <script type="text/javascript">
+       //頂點着色器
+        var VSHADER_SOURCE =
+          `attribute vec4 a_Position;
+           attribute vec4 a_Color;
+           varying vec4 v_Color;
+           void main() {
+             gl_Position = a_Position;
+             v_Color = a_Color;
+           }`;
+
+        // 片元着色器
+        var FSHADER_SOURCE =
+          `precision mediump float;
+           varying vec4 v_Color;
+           void main() {
+             gl_FragColor =v_Color;
+           }`;
+          var bloom_vs = `
+          #ifdef GL_ES
+             precision highp float;
+          #endif
+          attribute vec3 aPos;
+          attribute vec4 aNormal;
+          attribute vec2 aTexCoords;
+          varying vec3 FragPos;
+          varying vec3 Normal;
+          varying vec2 TexCoords;
+          uniform mat4 viewProjection;
+          uniform mat4 model;
+          uniform mat4 normalMatrix;
+          void main()
+          {
+             FragPos = vec3(model * vec4(aPos, 1.0));
+             TexCoords = aTexCoords; 
+             Normal = normalize(vec3(normalMatrix * aNormal));
+             gl_Position = viewProjection * model *vec4(aPos, 1.0);
+          }
+        `;
+        
+        var bloom_fs = `
+          //#extension GL_EXT_draw_buffers:require  
+          #ifdef GL_ES
+             precision highp float;
+          #endif 
+          varying vec3 FragPos;
+          varying vec3 Normal;
+          varying vec2 TexCoords;
+          
+          struct Light {
+            vec3 Position;
+            vec3 Color;
+          };
+          uniform Light lights[4];
+          uniform sampler2D diffuseTexture;
+          uniform vec3 viewPos;
+
+          void main()
+          {
+            vec3 color = texture2D(diffuseTexture, TexCoords).rgb;
+            vec3 normal = normalize(Normal);
+            //ambient
+            vec3 ambient = 0.0 * color;
+            vec3 lighting = vec3(0.0);
+            vec3 viewDir = normalize(viewPos - FragPos);
+            for(int i = 0;i<4;i++){
+              // diffuse
+              vec3 lightDir = normalize(lights[i].Position - FragPos);
+              float diff = max(dot(lightDir, normal), 0.0);
+              vec3 result = lights[i].Color * diff * color;      
+              //attenuation (use quadratic as we have gamma correction)
+              float distance = length(FragPos - lights[i].Position);
+              result *= 1.0 / (distance * distance);
+              lighting += result;
+            }
+            vec3 result = ambient + lighting;
+            //check whether result is higher than some threshold, if so, output as bloom threshold color
+            //float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
+            //if(brightness > 1.0)
+            //  gl_FragData[1] = vec4(result, 1.0);
+            //else
+            //    gl_FragData[1] = vec4(0.0, 0.0, 0.0, 1.0);
+            //gl_FragData[0] = vec4(color, 1.0);
+            gl_FragColor = vec4(result,1.0);
+          }
+        `;
+        function _main(){
+           var canvas = document.getElementById('webgl');
+           var gl = getWebGLContext(canvas);//拿到webglcontext,主要有這幾種 "webgl", "experimental-webgl", "webkit-3d", "moz-webgl"
+           var program = createProgram(gl, VSHADER_SOURCE, FSHADER_SOURCE);//webglcontext和着色器的关联，生成着色器程序对象。
+           getGLSLLocation(gl, program);//获取glsl中attributes和uniforms的location
+
+            
+           var n = initialAttributes(gl, program);
+           gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+           gl.clear(gl.COLOR_BUFFER_BIT);
+
+           gl.useProgram(program);//这一步非常重要，必须指明gl要运行的着色器程序
+           gl.drawArrays(gl.TRIANGLES, 0, n);
+        }
+        var isLoaded = 0;
+        var cameraPos = [0.0, 18.0, 20.0];
+        function main(){
+          var canvas = document.getElementById('webgl');
+           var gl = getWebGLContext(canvas);
+           gl.getExtension("OES_texture_float_linear");
+            gl.getExtension("OES_texture_float");
+            gl.getExtension("OES_texture_half_float");
+            gl.getExtension("OES_texture_half_float_linear");
+            ext = gl.getExtension("WEBGL_draw_buffers");
+           var bloomProgram = createProgram(gl,bloom_vs,bloom_fs);
+            bloomProgram.aPos = gl.getAttribLocation(bloomProgram,'aPos');
+            bloomProgram.aNormal = gl.getAttribLocation(bloomProgram,'aNormal');
+            bloomProgram.aTexCoords = gl.getAttribLocation(bloomProgram,'aTexCoords');
+            bloomProgram.viewProjection = gl.getUniformLocation(bloomProgram,'viewProjection');
+            //bloomProgram.view = gl.getUniformLocation(bloomProgram,'view');
+            bloomProgram.model = gl.getUniformLocation(bloomProgram,'model');
+            bloomProgram.normalMatrix = gl.getUniformLocation(bloomProgram,'normalMatrix');
+            bloomProgram.diffuseTexture = gl.getUniformLocation(bloomProgram,'diffuseTexture');
+            bloomProgram.viewPos = gl.getUniformLocation(bloomProgram,'viewPos');
+            bloomProgram.lights = [];
+            for (var i = 0; i < 4; i++) {
+              bloomProgram.lights[i] = {};
+              bloomProgram.lights[i].Position = gl.getUniformLocation(bloomProgram, 'lights[' + i + '].Position');
+              bloomProgram.lights[i].Color = gl.getUniformLocation(bloomProgram, 'lights[' + i + '].Color');
+            }
+            gl.enable(gl.DEPTH_TEST);
+            //gl.enable(gl.BLEND);
+            //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            var viewProjMatrix = new Matrix4();
+            viewProjMatrix.setPerspective(45.0, canvas.width / canvas.height, 1.0, 200.0);
+            viewProjMatrix.lookAt(cameraPos[0], cameraPos[1], cameraPos[2], 0, 0, 0, 0, 1, 0);
+
+            var wood_bloom = initTextures(gl,bloomProgram,bloomProgram.diffuseTexture,'../images/wood.png',0);
+            var {lightPositions,lightColors} = initLights();
+            var draw = function(){
+              if(isLoaded == 1) {
+              gl.clearColor(0.0, 0.0, 0.0, 1.0);
+              gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+              gl.useProgram(bloomProgram);
+              gl.uniformMatrix4fv(bloomProgram.viewProjection,false,viewProjMatrix.elements);
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D,wood_bloom);
+              for(var i=0;i<lightPositions.length;i++){
+                  gl.uniform3f(bloomProgram.lights[i].Position, lightPositions[i][0], lightPositions[i][1], lightPositions[i][2]);
+                  gl.uniform3f(bloomProgram.lights[i].Color, lightColors[i][0], lightColors[i][1], lightColors[i][2]);
+              }   
+              AddCube(gl,bloomProgram, [0.0,-1.0,0.0], [12.5,0.5,12.5]);
+            }
+              requestAnimationFrame(draw, canvas);
+            }
+            draw();
+        }
+
+        function getGLSLLocation(gl, program) {
+            program.a_Position = gl.getAttribLocation(program, 'a_Position');
+            program.a_Color = gl.getAttribLocation(program, 'a_Color');
+        }
+
+        function initialAttributes(gl,program) {
+            var vertics = new Float32Array([
+                 0.0, 0.5, 0.0, 1.0,0.0,0.0,
+                -0.5, -0.5, 0.0, 0.0,1.0,0.0,
+                0.5, -0.5, 0.0, 0.0,0.0,1.0
+            ]);//顶点数据,标准化设备坐标(NDC)，最后会转换到屏幕坐标上去
+
+            var vertexBuffer = gl.createBuffer();
+            if (!vertexBuffer) return -1;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);//这个过程类似初始化一个空的ARRAY_BUFFER类型的数据缓冲区
+            gl.bufferData(gl.ARRAY_BUFFER, vertics, gl.STATIC_DRAW);//将数据填充到缓冲区中
+            var FSIZE = vertics.BYTES_PER_ELEMENT;
+
+            gl.vertexAttribPointer(program.a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0);//将缓冲数据分配到对应的位置上上
+            gl.enableVertexAttribArray(program.a_Position);//开启数据分配操作
+
+            gl.vertexAttribPointer(program.a_Color, 3, gl.FLOAT, false, FSIZE * 6, FSIZE * 3);
+            gl.enableVertexAttribArray(program.a_Color);
+
+            return 3;
+        }
+
+        function AddCube(gl,program,trans,scale){
+            var model = new Matrix4();
+            var normalMatrix = new Matrix4();
+            model.translate(trans[0],trans[1],trans[2]);
+            model.scale(scale[0],scale[1],scale[2]);
+            gl.uniformMatrix4fv(program.model,false, model.elements);
+            normalMatrix.setInverseOf(model);
+            normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.normalMatrix, false, normalMatrix.elements);
+            renderCube(gl,program);
+        }
+
+        function renderCube(gl,program){
+            var vertices = new Float32Array([
+            -1.0, -1.0, -1.0,  0.0,  0.0, -1.0, 0.0, 0.0, // bottom-left
+             1.0,  1.0, -1.0,  0.0,  0.0, -1.0, 1.0, 1.0, // top-right
+             1.0, -1.0, -1.0,  0.0,  0.0, -1.0, 1.0, 0.0, // bottom-right         
+             1.0,  1.0, -1.0,  0.0,  0.0, -1.0, 1.0, 1.0, // top-right
+            -1.0, -1.0, -1.0,  0.0,  0.0, -1.0, 0.0, 0.0, // bottom-left
+            -1.0,  1.0, -1.0,  0.0,  0.0, -1.0, 0.0, 1.0, // top-left
+            // front face
+            -1.0, -1.0,  1.0,  0.0,  0.0,  1.0, 0.0, 0.0, // bottom-left
+             1.0, -1.0,  1.0,  0.0,  0.0,  1.0, 1.0, 0.0, // bottom-right
+             1.0,  1.0,  1.0,  0.0,  0.0,  1.0, 1.0, 1.0, // top-right
+             1.0,  1.0,  1.0,  0.0,  0.0,  1.0, 1.0, 1.0, // top-right
+            -1.0,  1.0,  1.0,  0.0,  0.0,  1.0, 0.0, 1.0, // top-left
+            -1.0, -1.0,  1.0,  0.0,  0.0,  1.0, 0.0, 0.0, // bottom-left
+            // left face
+            -1.0,  1.0,  1.0, -1.0,  0.0,  0.0, 1.0, 0.0, // top-right
+            -1.0,  1.0, -1.0, -1.0,  0.0,  0.0, 1.0, 1.0, // top-left
+            -1.0, -1.0, -1.0, -1.0,  0.0,  0.0, 0.0, 1.0, // bottom-left
+            -1.0, -1.0, -1.0, -1.0,  0.0,  0.0, 0.0, 1.0, // bottom-left
+            -1.0, -1.0,  1.0, -1.0,  0.0,  0.0, 0.0, 0.0, // bottom-right
+            -1.0,  1.0,  1.0, -1.0,  0.0,  0.0, 1.0, 0.0, // top-right
+            // right face
+             1.0,  1.0,  1.0,  1.0,  0.0,  0.0, 1.0, 0.0, // top-left
+             1.0, -1.0, -1.0,  1.0,  0.0,  0.0, 0.0, 1.0, // bottom-right
+             1.0,  1.0, -1.0,  1.0,  0.0,  0.0, 1.0, 1.0, // top-right         
+             1.0, -1.0, -1.0,  1.0,  0.0,  0.0, 0.0, 1.0, // bottom-right
+             1.0,  1.0,  1.0,  1.0,  0.0,  0.0, 1.0, 0.0, // top-left
+             1.0, -1.0,  1.0,  1.0,  0.0,  0.0, 0.0, 0.0, // bottom-left     
+            // bottom face
+            -1.0, -1.0, -1.0,  0.0, -1.0,  0.0, 0.0, 1.0, // top-right
+             1.0, -1.0, -1.0,  0.0, -1.0,  0.0, 1.0, 1.0, // top-left
+             1.0, -1.0,  1.0,  0.0, -1.0,  0.0, 1.0, 0.0, // bottom-left
+             1.0, -1.0,  1.0,  0.0, -1.0,  0.0, 1.0, 0.0, // bottom-left
+            -1.0, -1.0,  1.0,  0.0, -1.0,  0.0, 0.0, 0.0, // bottom-right
+            -1.0, -1.0, -1.0,  0.0, -1.0,  0.0, 0.0, 1.0, // top-right
+            // top face
+            -1.0,  1.0, -1.0,  0.0,  1.0,  0.0, 0.0, 1.0, // top-left
+             1.0,  1.0 , 1.0,  0.0,  1.0,  0.0, 1.0, 0.0, // bottom-right
+             1.0,  1.0, -1.0,  0.0,  1.0,  0.0, 1.0, 1.0, // top-right     
+             1.0,  1.0,  1.0,  0.0,  1.0,  0.0, 1.0, 0.0, // bottom-right
+            -1.0,  1.0, -1.0,  0.0,  1.0,  0.0, 0.0, 1.0, // top-left
+            -1.0,  1.0,  1.0,  0.0,  1.0,  0.0, 0.0, 0.0  // bottom-left   
+          ]);
+          var vertexBuffer = gl.createBuffer();
+            if (!vertexBuffer) return -1;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);//这个过程类似初始化一个空的ARRAY_BUFFER类型的数据缓冲区
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);//将数据填充到缓冲区中
+            var FSIZE = vertices.BYTES_PER_ELEMENT;
+
+            gl.vertexAttribPointer(program.aPos, 3, gl.FLOAT, false, FSIZE * 8, 0);//将缓冲数据分配到对应的位置上上
+            gl.enableVertexAttribArray(program.aPos);//开启数据分配操作
+
+            gl.vertexAttribPointer(program.aNormal, 3, gl.FLOAT, false, FSIZE * 8, FSIZE * 3);
+            //将缓冲数据分配到对应的位置上上
+            gl.enableVertexAttribArray(program.aNormal);//开启数据分配操作
+
+            gl.vertexAttribPointer(program.aTexCoords, 2, gl.FLOAT, false, FSIZE * 8, FSIZE * 6);
+            gl.enableVertexAttribArray(program.aTexCoords);
+            gl.drawArrays(gl.TRIANGLES, 0, 36);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        }
+
+        function initTextures(gl, program,sampler, url,index) {
+            var texture = gl.createTexture();   // Create a texture object
+            if (!texture) {
+                console.log('Failed to create the texture object');
+                return null;
+            }
+
+            var image = new Image();  // Create a image object
+            if (!image) {
+                console.log('Failed to create the image object');
+                return null;
+            }
+            // Register the event handler to be called when image loading is completed
+            image.onload = function () {
+                isLoaded++;
+                // Write the image data to texture object
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);  // Flip the image Y coordinate
+                gl.activeTexture(gl.TEXTURE0+index);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+                // Pass the texure unit 0 to u_Sampler
+                gl.useProgram(program);
+                gl.uniform1i(sampler, index);
+
+                gl.bindTexture(gl.TEXTURE_2D, null); // Unbind texture
+            };
+
+            // Tell the browser to load an Image
+            image.src = url;
+
+            return texture;
+        }
+        function initLights(){
+            var lightPositions = [];
+            var lightColors = [];
+            lightPositions.push([0.0,0.5,1.5]);
+            lightPositions.push([-4.0,0.5,-3.0]);
+            lightPositions.push([3.0,0.5,1.0]);
+            lightPositions.push([-0.8,2.4,-1.0]);
+            //
+            lightColors.push([2.0,2.0,2.0]);
+            lightColors.push([1.5,0.0,0.0]);
+            lightColors.push([3.0,0.0,1.5]);
+            lightColors.push([0.0,1.5,0.0]);
+            return {lightPositions,lightColors};
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="webgl" width="768" height="768">
+        Please use a browser that supports "canvas"
+    </canvas>
+</body>
+</html>

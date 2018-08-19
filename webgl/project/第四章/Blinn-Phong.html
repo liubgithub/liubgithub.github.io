@@ -1,0 +1,395 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>高级光照</title>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix.js"></script>
+    <script type="text/javascript">
+        //片段着色器
+        var VSHADER_SOURCE =
+          `attribute vec4 a_Position;
+           attribute vec4 a_Normal;        // Normal
+           varying vec4 v_FragPos;
+           varying vec3 v_Normal;
+           attribute vec2 a_TexCoord;
+           varying vec2 v_TextCoords;
+           uniform mat4 u_MvpMatrix;
+           uniform mat4 u_normalMatrix;   //transpose(inverse(u_ModelMatrix))这个过程在js里算的
+           uniform mat4 u_ModelMatrix;    // Model matrix
+           void main() {
+            v_FragPos = u_ModelMatrix * a_Position;
+            v_Normal =vec3(-1.0) * normalize(vec3(u_normalMatrix * a_Normal));
+            v_TextCoords = a_TexCoord;
+             gl_Position = u_MvpMatrix * a_Position;
+         }`;
+        //片元着色器
+        var FSHADER_SOURCE =
+          `#ifdef GL_ES
+          precision mediump float;
+          #endif
+          varying vec3 v_Normal;
+          varying vec4 v_FragPos;
+          varying vec2 v_TextCoords;
+
+          uniform vec3 u_lightPos;
+          uniform vec3 u_viewPos;
+          uniform vec3 u_lightColor;
+          //uniform vec3 u_objectColor;
+
+          uniform sampler2D u_Sampler;
+          void main() {
+            //ambient 环境光
+            float ambientStrength = 0.05;
+            vec3 ambient = ambientStrength * u_lightColor*texture2D(u_Sampler, v_TextCoords).rgb;
+          //diffuse 漫反射
+            vec3 norm = normalize(v_Normal);
+            vec3 lightDir = vec3(normalize(u_lightPos - vec3(v_FragPos)));
+            float diff = max(dot(norm, lightDir), 0.0);
+            vec3 diffuse = diff * u_lightColor*texture2D(u_Sampler, v_TextCoords).rgb;
+          // specular 镜面反射
+            float specularStrength = 0.6;
+            vec3 viewDir = vec3(normalize(u_viewPos - vec3(v_FragPos)));
+            //vec3 reflectDir = reflect(-lightDir, norm);
+            //此处用到的是半程向量，而不是直接用反射向量，因为光线向量和视线向量点乘可能<=0,可避免是效果失真
+            vec3 halfwayDir = normalize(lightDir+viewDir);
+            float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
+            //float spec = dot(viewDir, reflectDir);
+            vec3 specular = specularStrength *u_lightColor*spec;
+
+            //vec3 result = (ambient + diffuse + specular) * u_objectColor;
+            vec3 result = ambient +diffuse +specular;
+            //vec3 result = vec3(v_FragPos) * u_objectColor;
+            gl_FragColor = vec4(result, 1.0);
+          }`;
+
+        var VSHADER_SOURCE_LIGHT =
+            `attribute vec4 a_Position;
+            uniform mat4 u_lightmvpMatrix;
+            void main() {
+               gl_Position = u_lightmvpMatrix * a_Position;
+          }`;
+
+        var FSHADER_SOURCE_LIGHT =
+          `#ifdef GL_ES
+          precision mediump float;
+          #endif
+          void main() {
+            gl_FragColor = vec4(1.0);
+        }`;
+
+        var cameraPos, light_Pos;
+        function main() {
+            var canvas = document.getElementById('webgl');
+
+            // 获取绘制上下文
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('获取webglcontext失败');
+                return;
+            }
+
+            // Initialize shaders
+            var lightProgram = createProgram(gl, VSHADER_SOURCE_LIGHT, FSHADER_SOURCE_LIGHT);
+            var planeProgram = createProgram(gl, VSHADER_SOURCE, FSHADER_SOURCE);
+            if (!lightProgram || !planeProgram) {
+                console.log('生成着色器程序失败');
+                return;
+            }
+
+            // 拿到着色器中的attribute和uniform的location
+            lightProgram.a_Position = gl.getAttribLocation(lightProgram, 'a_Position');
+            lightProgram.u_lightmvpMatrix = gl.getUniformLocation(lightProgram, 'u_lightmvpMatrix');
+
+            planeProgram.u_lightColor = gl.getUniformLocation(planeProgram, 'u_lightColor');
+            planeProgram.u_lightPos = gl.getUniformLocation(planeProgram, 'u_lightPos');
+            planeProgram.u_viewPos = gl.getUniformLocation(planeProgram, 'u_viewPos');
+
+
+            planeProgram.a_Position = gl.getAttribLocation(planeProgram, 'a_Position');
+            planeProgram.a_Normal = gl.getAttribLocation(planeProgram, 'a_Normal');
+            planeProgram.a_TexCoord = gl.getAttribLocation(planeProgram, 'a_TexCoord');
+
+            planeProgram.u_MvpMatrix = gl.getUniformLocation(planeProgram, 'u_MvpMatrix');
+            planeProgram.u_ModelMatrix = gl.getUniformLocation(planeProgram, 'u_ModelMatrix');
+            planeProgram.u_NormalMatrix = gl.getUniformLocation(planeProgram, 'u_normalMatrix');
+            planeProgram.u_Sampler = gl.getUniformLocation(planeProgram, 'u_Sampler');
+
+
+            // 设置灯光顶点
+            var cubeLight = initVertexBuffers(gl);
+
+            var planeObject = initPlaneVertexBuffers(gl);
+            if (!planeObject) {
+                console.log('Failed to set the vertex information');
+                return;
+            }
+            // 生成纹理
+            var texture = initTextures(gl, planeProgram, '../images/wood.png');
+            if (!texture) {
+                console.log('Failed to intialize the texture.');
+                return;
+            }
+
+            // 开启深度测试
+            gl.enable(gl.DEPTH_TEST);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+            // 计算视图矩阵
+            cameraPos = [0.0, 5.0, 10.0];
+            light_Pos = new Vector3([-2.0, 2.0, -2.0]);
+            var viewProjMatrix = new Matrix4();
+            viewProjMatrix.setPerspective(45.0, canvas.width / canvas.height, 1.0, 100.0);
+            viewProjMatrix.lookAt(cameraPos[0], cameraPos[1], cameraPos[2], 0, 0, 0, 0, 1, 0);
+
+            // 绘制
+            var currentAngle = 0.0; 
+            var tick = function () {
+                currentAngle = animate(currentAngle); 
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                // 画灯光物体
+                drawLight(gl, lightProgram, cubeLight, 2.0, currentAngle, viewProjMatrix);
+                // 画地板
+                drawPlane(gl, planeProgram,planeObject, texture, 0.0, 0.0, viewProjMatrix);
+                requestAnimationFrame(tick, canvas);
+            };
+            tick();
+        }
+
+        function initVertexBuffers(gl) {
+            // Create a cube
+            //    v6----- v5
+            //   /|      /|
+            //  v1------v0|
+            //  | |      | |
+            //  | |v7---|-|v4
+            //  |/      |/
+            //  v2------v3
+
+            var vertices = new Float32Array([   // 顶点坐标
+               1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0,    // v0-v1-v2-v3 front
+               1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0,    // v0-v3-v4-v5 right
+               1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0,    // v0-v5-v6-v1 up
+              -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0,    // v1-v6-v7-v2 left
+              -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,    // v7-v4-v3-v2 down
+               1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0     // v4-v7-v6-v5 back
+            ]);
+            var indices = new Uint8Array([        // 所以数组
+               0, 1, 2, 0, 2, 3,    // front
+               4, 5, 6, 4, 6, 7,    // right
+               8, 9, 10, 8, 10, 11,    // up
+              12, 13, 14, 12, 14, 15,    // left
+              16, 17, 18, 16, 18, 19,    // down
+              20, 21, 22, 20, 22, 23     // back
+            ]);
+
+            var o = new Object(); // 
+            // 生成缓冲区对象，供后面使用
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, vertices, 3, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            if (!o.vertexBuffer  || !o.indexBuffer) return null;
+
+            o.numIndices = indices.length;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        //初始化地板的相关数据
+        function initPlaneVertexBuffers(gl) {
+            var verticesCoords = new Float32Array([
+              // 地板的顶点坐标
+              -1.0, 1.0, 0.0,
+              -1.0, -1.0, 0.0,
+               1.0, 1.0, 0.0,
+               1.0, -1.0, 0.0
+            ]);
+            var texCoords = new Float32Array([
+              //纹理坐标
+              0.0, 1.0,
+              0.0, 0.0,
+              1.0, 1.0,
+              1.0, 0.0
+            ]);
+
+            var normals = new Float32Array([   // 发现向量
+               0.0, 0.0, 1.0,
+               0.0, 0.0, 1.0,
+               0.0, 0.0, 1.0,
+               0.0, 0.0, 1.0
+            ]);
+
+            var indices = new Uint8Array([        // 顶点索引
+                0, 1, 2, 1, 2, 3   // front
+            ]);
+            var n = indices.length;
+
+            var o = {};
+            //同样，生成缓冲区对象
+            o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+            o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+            o.normalBuffer = initArrayBufferForLaterUse(gl, normals, 3, gl.FLOAT);
+            o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices, gl.UNSIGNED_BYTE);
+            o.numIndices = indices.length;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return o;
+        }
+
+        function initTextures(gl, program, url) {
+            var texture = gl.createTexture();   // 创建纹理对象
+            if (!texture) {
+                console.log('纹理对象创建失败');
+                return null;
+            }
+
+            var image = new Image();  //创建图像对象
+            image.onload = function () {
+                // 图像加载完成后写入纹理数据
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);  // 
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                //狮子纹理参数
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+                // 写入采样器的纹理单元
+                gl.useProgram(program);
+                gl.uniform1i(program.u_Sampler, 0);
+
+                gl.bindTexture(gl.TEXTURE_2D, null); // 解绑
+            };
+
+            image.src = url;
+
+            return texture;
+        }
+        //画灯光对象
+        function drawLight(gl, program, o, x, angle, viewProjMatrix) {
+            gl.useProgram(program);   // 
+
+            // 分配图元
+            initAttributeVariable(gl, program.a_Position, o.vertexBuffer); 
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);  
+
+            drawLightCube(gl, program, o, x, angle, viewProjMatrix);   // Draw
+        }
+        //画地板对象
+        function drawPlane(gl, program, o, texture, x, angle, viewProjMatrix) {
+            gl.useProgram(program);   
+
+            gl.uniform3f(program.u_lightColor, 1.0, 1.0, 1.0);
+            gl.uniform3f(program.u_lightPos, light_Pos.elements[0], light_Pos.elements[1], light_Pos.elements[2]);
+            gl.uniform3f(program.u_viewPos, cameraPos[0], cameraPos[1], cameraPos[2]);
+            // Assign the buffer objects and enable the assignment
+            initAttributeVariable(gl, program.a_Position, o.vertexBuffer); // Vertex coordinates
+            initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);// Texture coordinates
+            initAttributeVariable(gl, program.a_Normal, o.normalBuffer);   // Normal
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);  // Bind indices
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            drawQuad(gl, program, o, x, angle, viewProjMatrix);
+        }
+
+
+        // 将数据写入缓冲区
+        function initAttributeVariable(gl, a_attribute, buffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
+            gl.enableVertexAttribArray(a_attribute);
+        }
+        //绘制四边形
+        function drawQuad(gl, program, o, x, angle, viewProjMatrix) {
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+            // 计算模型矩阵
+            g_modelMatrix.setTranslate(0, 0.0, 0.0);
+            g_modelMatrix.rotate(90.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.rotate(angle, 0.0, 1.0, 0.0);
+            g_modelMatrix.scale(5, 5, 1);
+
+            // 视图矩阵计算
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+            //算法线矩阵
+            g_normalMatrix.setInverseOf(g_modelMatrix);
+            g_normalMatrix.transpose();
+            gl.uniformMatrix4fv(program.u_ModelMatrix, false, g_modelMatrix.elements);
+            gl.uniformMatrix4fv(program.u_MvpMatrix, false, g_mvpMatrix.elements);
+            gl.uniformMatrix4fv(program.u_NormalMatrix, false, g_normalMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);   
+        }
+
+
+        function drawLightCube(gl, program, o, x, angle, viewProjMatrix) {
+
+            var g_modelMatrix = new Matrix4();
+            var g_mvpMatrix = new Matrix4();
+            var g_normalMatrix = new Matrix4();
+            g_modelMatrix.translate(light_Pos.elements[0], light_Pos.elements[1], light_Pos.elements[2]);
+            g_modelMatrix.rotate(20.0, 1.0, 0.0, 0.0);
+            g_modelMatrix.scale(0.1, 0.1, 0.1);
+            g_mvpMatrix.set(viewProjMatrix);
+            g_mvpMatrix.multiply(g_modelMatrix);
+            gl.uniformMatrix4fv(program.u_lightmvpMatrix, false, g_mvpMatrix.elements);
+
+            gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);   // Draw
+        }
+
+        function initArrayBufferForLaterUse(gl, data, num, type) {
+            var buffer = gl.createBuffer();  
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.num = num;
+            buffer.type = type;
+
+            return buffer;
+        }
+        function initElementArrayBufferForLaterUse(gl, data, type) {
+            var buffer = gl.createBuffer();　  
+            if (!buffer) {
+                console.log('Failed to create the buffer object');
+                return null;
+            }
+            // Write date into the buffer object
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+            buffer.type = type;
+
+            return buffer;
+        }
+
+        var ANGLE_STEP = 30;   
+
+        var last = Date.now(); 
+        function animate(angle) {
+            var now = Date.now();   
+            var elapsed = now - last;
+            last = now;
+            var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+            return newAngle % 360;
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="webgl" width="512" height="512">
+        Please use a browser that supports "canvas"
+    </canvas>
+    <p>关于blinn-Phong模型为什么用半程向量(half vector)与表面法向量相乘来代替光线向量与视线向量相乘的理解:
+    <p>1、光线向量和视线向量点乘可能<=0,是效果失真。</p>
+    <p>2、当法线向量和半程向量重合也就是夹角为0时，视线方向向量也正好与反射光线向量重合，证明他们是线性相关，可通过乘一个常量值来拉伸这个线性关系</p>
+</body>
+</html>
